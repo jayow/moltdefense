@@ -8,6 +8,7 @@ const submitRouter = require('./api/submit');
 const matchRouter = require('./api/match');
 const resultsRouter = require('./api/results');
 const demoRouter = require('./api/demo');
+const historyRouter = require('./api/history');
 const { setMatchUpdateCallback, getQueueStats, setMatchSpeed } = require('./matchmaker');
 
 // Create Express app
@@ -32,6 +33,7 @@ app.use('/submit', submitRouter);
 app.use('/match', matchRouter);
 app.use('/results', resultsRouter);
 app.use('/demo', demoRouter);
+app.use('/history', historyRouter);
 
 // Queue status endpoint
 app.get('/status', (req, res) => {
@@ -142,6 +144,7 @@ server.listen(PORT, () => {
 ║    POST /demo        - Start demo match                   ║
 ║    GET  /match/:id   - Get match state                    ║
 ║    GET  /results/:id - Get match results                  ║
+║    GET  /history     - Match history for strategy         ║
 ║    GET  /status      - Queue status                       ║
 ║                                                           ║
 ║  WebSocket: ws://localhost:${PORT}                           ║

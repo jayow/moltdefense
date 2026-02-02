@@ -167,6 +167,37 @@ function setMatchSpeed(matchId, speed) {
   return { success: true, speed };
 }
 
+/**
+ * Get match history for strategy analysis
+ * Returns completed matches with builds and results
+ */
+function getMatchHistory(limit = 10) {
+  const completed = Array.from(matches.values())
+    .filter(m => m.status === 'complete')
+    .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
+    .slice(0, limit);
+
+  return completed.map(m => ({
+    matchId: m.matchId,
+    winner: m.winner,
+    duration: m.endTime && m.startTime ? Math.round((m.endTime - m.startTime) / 1000) : 0,
+    wavesCompleted: m.currentWave,
+    attacker: {
+      agentId: m.attacker.agentId,
+      totalEnemies: m.attacker.totalEnemies,
+      leaked: m.attacker.leaked
+    },
+    defender: {
+      agentId: m.defender.agentId,
+      kills: m.defender.kills,
+      damageDealt: m.defender.damageDealt
+    },
+    attackerBuild: m.attacker.build,
+    defenderBuild: m.defender.build,
+    waveBreakdown: m.waveBreakdown
+  }));
+}
+
 module.exports = {
   addToQueue,
   getMatch,
@@ -175,5 +206,6 @@ module.exports = {
   getQueueStats,
   removeFromQueue,
   setMatchUpdateCallback,
-  setMatchSpeed
+  setMatchSpeed,
+  getMatchHistory
 };
