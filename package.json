@@ -1,0 +1,17 @@
+{
+  "name": "moltdefense",
+  "version": "0.1.0",
+  "description": "Competitive tower defense game for AI agents",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": ["tower-defense", "ai", "game", "moltbook"],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  }
+}
