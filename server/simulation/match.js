@@ -1,12 +1,36 @@
-const { TICKS_PER_SECOND, TOTAL_WAVES } = require('./constants');
-const { spawnWave, moveEnemy, resetEnemyCounter, getEnemyState } = require('./enemies');
-const { initializeTowers, processTower, getTowerState } = require('./towers');
+const {
+  TICKS_PER_SECOND,
+  TOTAL_WAVES,
+  WAVE_TIMING,
+  POWER_UP_DURATION,
+  POWER_UP_EFFECTS
+} = require('./constants');
+const {
+  spawnWave,
+  moveEnemy,
+  resetEnemyCounter,
+  getEnemyState,
+  processEnemyAuras,
+  processRegen,
+  applyShield,
+  applyInvisibility,
+  applySpeedBoost,
+  damageEnemy
+} = require('./enemies');
+const {
+  initializeTowersV2,
+  processTower,
+  getTowerState,
+  calculateTowerBuffs,
+  resetTowerCounter
+} = require('./towers');
 
 /**
- * Create a new match instance
+ * Create a new match instance with expanded features
  */
 function createMatch(matchId, attacker, defender) {
   resetEnemyCounter();
+  resetTowerCounter();
 
   return {
     matchId,
@@ -15,24 +39,37 @@ function createMatch(matchId, attacker, defender) {
       agentId: attacker.agentId,
       build: attacker.build,
       leaked: 0,
-      totalEnemies: 0
+      totalEnemies: 0,
+      // New: Wave timing and power-ups
+      waveTimings: attacker.build.waveTimings || [],
+      powerUps: attacker.build.powerUps || [],
+      powerUpsUsed: 0,
+      rushBonus: 0
     },
     defender: {
       agentId: defender.agentId,
       build: defender.build,
       kills: 0,
-      damageDealt: 0
+      damageDealt: 0,
+      // New: Power-ups
+      powerUps: defender.build.powerUps || [],
+      powerUpsUsed: 0,
+      activePowerUps: []  // Currently active power-up effects
     },
     currentWave: 0,
     totalWaves: TOTAL_WAVES,
     tick: 0,
     enemies: [],
-    towers: initializeTowers(defender.build),
+    towers: initializeTowersV2(defender.build),
+    towerBuffs: {},  // Cache of tower buffs from support towers
     events: [],
     waveBreakdown: [],
     winner: null,
     startTime: null,
-    endTime: null
+    endTime: null,
+    // Wave timing state
+    lastWaveEndTick: 0,
+    speed: 1
   };
 }
 
@@ -43,20 +80,26 @@ function getMatchState(match) {
   return {
     matchId: match.matchId,
     status: match.status,
+    winner: match.winner,  // Include winner for completed matches
     currentWave: match.currentWave,
     totalWaves: match.totalWaves,
     tick: match.tick,
     attacker: {
       agentId: match.attacker.agentId,
-      leaked: match.attacker.leaked
+      leaked: match.attacker.leaked,
+      rushBonus: match.attacker.rushBonus
     },
     defender: {
       agentId: match.defender.agentId,
-      kills: match.defender.kills
+      kills: match.defender.kills,
+      activePowerUps: match.defender.activePowerUps.map(p => ({
+        type: p.type,
+        endsAt: p.endsAt
+      }))
     },
     enemies: match.enemies.filter(e => e.alive && !e.leaked).map(getEnemyState),
     towers: match.towers.map(getTowerState),
-    events: match.events.slice(-20) // Last 20 events
+    events: match.events.slice(-20)
   };
 }
 
@@ -77,7 +120,8 @@ function getMatchResults(match) {
     attacker: {
       agentId: match.attacker.agentId,
       totalEnemies: match.attacker.totalEnemies,
-      leaked: match.attacker.leaked
+      leaked: match.attacker.leaked,
+      rushBonus: match.attacker.rushBonus
     },
     defender: {
       agentId: match.defender.agentId,
@@ -90,15 +134,181 @@ function getMatchResults(match) {
 }
 
 /**
+ * Process defender power-ups (check for expiration, apply effects)
+ */
+function processDefenderPowerUps(match, tickEvents) {
+  const activePowerUps = match.defender.activePowerUps;
+
+  // Process each active power-up
+  for (let i = activePowerUps.length - 1; i >= 0; i--) {
+    const powerUp = activePowerUps[i];
+
+    // Check if expired
+    if (match.tick >= powerUp.endsAt) {
+      tickEvents.push({
+        tick: match.tick,
+        type: 'powerup_end',
+        powerUp: powerUp.type,
+        side: 'defender'
+      });
+      activePowerUps.splice(i, 1);
+      continue;
+    }
+
+    // Apply ongoing effects
+    switch (powerUp.type) {
+      case 'freeze':
+        // Freeze all enemies
+        for (const enemy of match.enemies) {
+          if (enemy.alive && !enemy.leaked) {
+            enemy.speedMultiplier = 0;
+          }
+        }
+        break;
+      case 'damageBoost':
+        // Damage boost is applied in tower processing via towerBuffs
+        break;
+    }
+  }
+}
+
+/**
+ * Activate a defender power-up
+ */
+function activateDefenderPowerUp(match, powerUp, tickEvents) {
+  const duration = POWER_UP_DURATION[powerUp.type] || 60;
+
+  tickEvents.push({
+    tick: match.tick,
+    type: 'powerup_start',
+    powerUp: powerUp.type,
+    side: 'defender'
+  });
+
+  match.defender.powerUpsUsed++;
+
+  switch (powerUp.type) {
+    case 'freeze':
+    case 'damageBoost':
+      // Duration-based power-ups
+      match.defender.activePowerUps.push({
+        type: powerUp.type,
+        endsAt: match.tick + duration
+      });
+      break;
+
+    case 'chainLightning':
+      // Instant effect - damage all enemies with chain
+      const effect = POWER_UP_EFFECTS.chainLightning;
+      let damage = effect.damage;
+      const sortedEnemies = [...match.enemies]
+        .filter(e => e.alive && !e.leaked)
+        .sort((a, b) => b.position - a.position);
+
+      for (let i = 0; i < Math.min(effect.jumps, sortedEnemies.length); i++) {
+        const enemy = sortedEnemies[i];
+        const killed = damageEnemy(enemy, damage);
+
+        tickEvents.push({
+          tick: match.tick,
+          type: 'damage',
+          source: 'chainLightning',
+          enemy: enemy.id,
+          amount: Math.round(damage)
+        });
+
+        if (killed) {
+          match.defender.kills++;
+          tickEvents.push({
+            tick: match.tick,
+            type: 'kill',
+            source: 'chainLightning',
+            enemy: enemy.id
+          });
+        }
+
+        damage *= effect.decay;
+      }
+      break;
+
+    case 'reinforcement':
+      // Spawn temporary tower - handled separately
+      // For now, add a damage boost effect
+      match.defender.activePowerUps.push({
+        type: 'damageBoost',
+        endsAt: match.tick + duration
+      });
+      break;
+  }
+}
+
+/**
+ * Apply attacker power-up to enemies in current wave
+ */
+function applyAttackerPowerUp(match, powerUp, tickEvents) {
+  tickEvents.push({
+    tick: match.tick,
+    type: 'powerup_start',
+    powerUp: powerUp.type,
+    side: 'attacker'
+  });
+
+  match.attacker.powerUpsUsed++;
+
+  // Find target enemy or apply to all/first
+  const aliveEnemies = match.enemies.filter(e => e.alive && !e.leaked);
+  if (aliveEnemies.length === 0) return;
+
+  // Target first enemy if no specific target
+  const target = aliveEnemies[0];
+
+  switch (powerUp.type) {
+    case 'shield':
+      applyShield(target, 50);  // 50 HP shield
+      break;
+
+    case 'speedBoost':
+      const boostDuration = POWER_UP_DURATION.speedBoost;
+      const boostMultiplier = POWER_UP_EFFECTS.speedBoost;
+      applySpeedBoost(target, boostMultiplier, boostDuration, match.tick);
+      break;
+
+    case 'invisibility':
+      const invisDuration = POWER_UP_DURATION.invisibility;
+      applyInvisibility(target, invisDuration, match.tick);
+      break;
+
+    case 'healPulse':
+      // Heal all nearby enemies
+      const effect = POWER_UP_EFFECTS.healPulse;
+      for (const enemy of aliveEnemies) {
+        if (Math.abs(enemy.position - target.position) <= effect.radius) {
+          enemy.hp = Math.min(enemy.maxHp, enemy.hp + effect.amount);
+        }
+      }
+      break;
+  }
+}
+
+/**
  * Process a single tick of the match
  */
 function tick(match) {
   match.tick++;
   const tickEvents = [];
 
-  // Move all enemies
+  // 1. Process defender power-ups (freeze, damage boost expiration)
+  processDefenderPowerUps(match, tickEvents);
+
+  // 2. Process enemy auras (heal, armor, resistance)
+  processEnemyAuras(match.enemies);
+
+  // 3. Process enemy regeneration
+  processRegen(match.enemies);
+
+  // 4. Move all enemies (with current tick for state expiration)
   for (const enemy of match.enemies) {
-    const leaked = moveEnemy(enemy);
+    const leaked = moveEnemy(enemy, match.tick);
     if (leaked) {
       match.attacker.leaked++;
       tickEvents.push({
@@ -109,9 +319,21 @@ function tick(match) {
     }
   }
 
-  // Process all towers
+  // 5. Calculate tower buffs from support towers
+  match.towerBuffs = calculateTowerBuffs(match.towers);
+
+  // Apply damage boost from defender power-up
+  const hasDamageBoost = match.defender.activePowerUps.some(p => p.type === 'damageBoost');
+  if (hasDamageBoost) {
+    for (const towerId in match.towerBuffs) {
+      match.towerBuffs[towerId].damageMultiplier *= POWER_UP_EFFECTS.damageBoost;
+    }
+  }
+
+  // 6. Process all towers with buffs
   for (const tower of match.towers) {
-    const events = processTower(tower, match.enemies, match.tick);
+    const buff = match.towerBuffs[tower.id] || { damageMultiplier: 1.0 };
+    const events = processTower(tower, match.enemies, match.tick, buff);
     tickEvents.push(...events);
 
     // Track stats
@@ -139,12 +361,33 @@ function isWaveComplete(match) {
 }
 
 /**
- * Run a complete wave
- * Returns a generator that yields state on each tick
+ * Run a complete wave with timing support
  */
 function* runWave(match, waveIndex) {
   const waveConfig = match.attacker.build.waves[waveIndex];
+  const waveTiming = match.attacker.waveTimings[waveIndex] || {};
   match.currentWave = waveIndex + 1;
+
+  // Calculate rush bonus if applicable
+  if (waveIndex > 0 && waveTiming.rush) {
+    const ticksSinceLastWave = match.tick - match.lastWaveEndTick;
+    if (ticksSinceLastWave < WAVE_TIMING.baseDelay) {
+      const ticksRushed = WAVE_TIMING.baseDelay - ticksSinceLastWave;
+      const bonus = Math.min(
+        ticksRushed * WAVE_TIMING.rushBonusPerTick,
+        WAVE_TIMING.maxRushBonus
+      );
+      match.attacker.rushBonus += bonus;
+
+      match.events.push({
+        tick: match.tick,
+        type: 'rush',
+        wave: match.currentWave,
+        ticksRushed,
+        bonusEarned: bonus
+      });
+    }
+  }
 
   // Spawn enemies for this wave
   match.enemies = spawnWave(waveConfig);
@@ -167,8 +410,26 @@ function* runWave(match, waveIndex) {
       enemy: enemy.id,
       enemyType: enemy.type,
       health: enemy.maxHp,
-      speed: enemy.speed
+      speed: enemy.speed,
+      armor: enemy.armor,
+      aura: enemy.aura
     });
+  }
+
+  // Apply attacker power-ups for this wave
+  const attackerPowerUps = match.attacker.powerUps.filter(p => p.wave === match.currentWave);
+  for (const powerUp of attackerPowerUps) {
+    const tickEvents = [];
+    applyAttackerPowerUp(match, powerUp, tickEvents);
+    match.events.push(...tickEvents);
+  }
+
+  // Apply defender power-ups for this wave
+  const defenderPowerUps = match.defender.powerUps.filter(p => p.wave === match.currentWave);
+  for (const powerUp of defenderPowerUps) {
+    const tickEvents = [];
+    activateDefenderPowerUp(match, powerUp, tickEvents);
+    match.events.push(...tickEvents);
   }
 
   // Track wave stats
@@ -193,15 +454,15 @@ function* runWave(match, waveIndex) {
     }
   }
 
-  // Wave complete - record stats
+  // Wave complete - record stats and timing
   waveStats.killed = spawnedCount;
   waveStats.leaked = 0;
   match.waveBreakdown.push(waveStats);
+  match.lastWaveEndTick = match.tick;
 }
 
 /**
  * Run a complete match
- * Returns a generator that yields state on each tick
  */
 function* runMatch(match) {
   match.status = 'in_progress';
@@ -236,12 +497,8 @@ function* runMatch(match) {
 
 /**
  * Run match at specified ticks per second (for real-time playback)
- * onTick callback receives state each tick
- * Returns a promise that resolves with final results
- * Speed can be changed dynamically via match.speed property
  */
 function runMatchRealtime(match, onTick, speed = 1) {
-  // Store speed on match object so it can be changed dynamically
   match.speed = speed;
 
   return new Promise((resolve) => {
@@ -259,7 +516,6 @@ function runMatchRealtime(match, onTick, speed = 1) {
         onTick(result.value);
       }
 
-      // Calculate tick interval dynamically based on current speed
       const currentSpeed = match.speed || 1;
       const tickInterval = 1000 / (TICKS_PER_SECOND * currentSpeed);
       setTimeout(processNextTick, tickInterval);

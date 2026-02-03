@@ -19,14 +19,23 @@ const COLORS = {
   path: '#1a2a3a',
   pathBorder: '#2d4059',
 
+  // Tower colors
   tower_basic: '#3498db',
   tower_slow: '#9b59b6',
   tower_burst: '#e74c3c',
+  tower_chain: '#e67e22',
+  tower_sniper: '#1abc9c',
+  tower_support: '#f1c40f',
   tower_range: 'rgba(255, 255, 255, 0.05)',
 
+  // Enemy colors
   enemy_runner: '#2ecc71',
   enemy_tank: '#f39c12',
   enemy_swarm_unit: '#1abc9c',
+  enemy_healer: '#e91e63',
+  enemy_shieldBearer: '#00bcd4',
+  enemy_regenerator: '#8bc34a',
+  enemy_boss: '#ff5722',
 
   healthBar: '#e74c3c',
   healthBarBg: '#333',
@@ -42,6 +51,59 @@ const COLORS = {
 // Convert game position (0-1000) to canvas X coordinate
 function gameToCanvasX(position) {
   return (position / PATH_LENGTH) * CANVAS_WIDTH;
+}
+
+// Projectile system
+let projectiles = [];
+let lastProjectileUpdate = performance.now();
+
+// Create a new projectile animation
+function createProjectile(fromX, fromY, toX, toY, towerType) {
+  projectiles.push({
+    fromX, fromY, toX, toY,
+    progress: 0,
+    type: towerType,
+    createdAt: performance.now()
+  });
+}
+
+// Update projectile positions
+function updateProjectiles(deltaTime) {
+  // Filter out completed projectiles and update active ones
+  projectiles = projectiles.filter(p => {
+    p.progress += (deltaTime / 1000) * 8; // ~125ms travel time
+    return p.progress < 1;
+  });
+}
+
+// Draw all active projectiles
+function drawProjectiles() {
+  for (const p of projectiles) {
+    // Interpolate position
+    const x = p.fromX + (p.toX - p.fromX) * p.progress;
+    const y = p.fromY + (p.toY - p.fromY) * p.progress;
+
+    // Draw projectile with tower color
+    const color = COLORS[`tower_${p.type}`] || '#fff';
+
+    // Outer glow
+    ctx.fillStyle = color + '44'; // Semi-transparent
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner core
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright center
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 // Clear the canvas
@@ -116,9 +178,28 @@ function drawTowerSlots() {
 function drawTowers(towers) {
   if (!towers || !Array.isArray(towers)) return;
 
-  for (const tower of towers) {
-    const x = gameToCanvasX(TOWER_POSITIONS[tower.slot]);
-    const y = tower.slot.charCodeAt(0) % 2 === 0 ? 50 : 150;
+  for (let i = 0; i < towers.length; i++) {
+    const tower = towers[i];
+
+    // Support position (live), x (replay), and slot-based (legacy) formats
+    let x, y;
+    if (tower.position !== undefined) {
+      // Live match format from getTowerState() - uses 'position' field
+      x = gameToCanvasX(tower.position);
+      y = tower.lane === 'bottom' ? 150 : 50;
+    } else if (tower.x !== undefined) {
+      // Replay/build format - uses 'x' field
+      x = gameToCanvasX(tower.x);
+      y = tower.lane === 'bottom' ? 150 : 50;
+    } else if (tower.slot && TOWER_POSITIONS[tower.slot]) {
+      // Legacy slot-based format
+      x = gameToCanvasX(TOWER_POSITIONS[tower.slot]);
+      y = tower.slot.charCodeAt(0) % 2 === 0 ? 50 : 150;
+    } else {
+      // Fallback for T0, T1, etc format
+      x = gameToCanvasX(100 + i * 200);
+      y = i % 2 === 0 ? 50 : 150;
+    }
 
     // Tower range indicator
     const range = 150;
@@ -146,17 +227,13 @@ function drawTowers(towers) {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(tower.slot, x, y + 4);
+    const label = tower.slot || `T${i}`;
+    ctx.fillText(label, x, y + 4);
 
     // Tower type label below
     ctx.fillStyle = COLORS.textDim;
     ctx.font = '8px monospace';
     ctx.fillText(tower.type, x, y + 28);
-
-    // Draw targeting line if tower has target
-    if (tower.target) {
-      // We'd need enemy position for this - simplified
-    }
   }
 }
 
@@ -172,6 +249,10 @@ function drawEnemies(enemies) {
     let size = 8;
     if (enemy.type === 'tank') size = 12;
     if (enemy.type === 'swarm_unit') size = 6;
+    if (enemy.type === 'healer') size = 9;
+    if (enemy.type === 'shieldBearer') size = 10;
+    if (enemy.type === 'regenerator') size = 11;
+    if (enemy.type === 'boss') size = 16;
 
     // Enemy body
     ctx.fillStyle = COLORS[`enemy_${enemy.type}`] || COLORS.enemy_runner;
@@ -187,7 +268,7 @@ function drawEnemies(enemies) {
     ctx.stroke();
 
     // Health bar
-    const hpPercent = enemy.hp / enemy.maxHp;
+    const hpPercent = (enemy.hp || 1) / (enemy.maxHp || 1);
     const barWidth = size * 2.5;
     const barHeight = 4;
     const barY = y - size - 8;
@@ -201,11 +282,19 @@ function drawEnemies(enemies) {
     ctx.fillRect(x - barWidth / 2, barY, barWidth * hpPercent, barHeight);
 
     // Slow indicator
-    if (enemy.speedMultiplier < 1) {
+    if (enemy.speedMultiplier && enemy.speedMultiplier < 1) {
       ctx.fillStyle = '#9b59b6';
       ctx.beginPath();
       ctx.arc(x, y - size - 15, 3, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // Type indicator for special enemies
+    if (enemy.type === 'healer' || enemy.type === 'shieldBearer') {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(enemy.type === 'healer' ? '+' : '▣', x, y + 3);
     }
   }
 }
@@ -220,6 +309,14 @@ function drawDamageEffects(events) {
 
 // Main render function
 function render(state) {
+  // Calculate delta time for projectile animation
+  const now = performance.now();
+  const deltaTime = now - lastProjectileUpdate;
+  lastProjectileUpdate = now;
+
+  // Update projectile positions
+  updateProjectiles(deltaTime);
+
   clear();
   drawPath();
   drawTowerSlots();
@@ -229,6 +326,9 @@ function render(state) {
     drawEnemies(state.enemies);
     drawDamageEffects(state.events);
   }
+
+  // Draw projectiles on top of everything
+  drawProjectiles();
 }
 
 // Update UI elements
@@ -296,5 +396,11 @@ window.renderer = {
   render,
   updateUI,
   addEvent,
-  clearEvents
+  clearEvents,
+  // Projectile system
+  createProjectile,
+  gameToCanvasX,
+  // Constants for external use
+  PATH_Y,
+  CANVAS_WIDTH
 };

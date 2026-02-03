@@ -1,26 +1,52 @@
 /**
  * Build generation strategies for Moltdefense test agents
+ * Updated for Phase 17: Game Expansion
  */
 
 // Game constants
 const BUDGET = 500;
 const TOTAL_WAVES = 5;
 
+// Original enemy costs (still supported)
 const ENEMY_COSTS = {
   runner: 50,
   tank: 100,
-  swarm: 75
+  swarm: 75,
+  // New enemy types
+  healer: 80,
+  shieldBearer: 90,
+  regenerator: 85,
+  boss: 200
 };
 
+// Original tower costs (still supported)
 const TOWER_COSTS = {
   basic: 100,
   slow: 100,
-  burst: 150
+  burst: 150,
+  // New tower types
+  chain: 125,
+  sniper: 175,
+  support: 80
+};
+
+// Power-up costs
+const POWER_UP_COSTS = {
+  // Attacker power-ups
+  shield: 40,
+  speedBoost: 25,
+  invisibility: 50,
+  healPulse: 35,
+  // Defender power-ups
+  damageBoost: 30,
+  freeze: 45,
+  chainLightning: 40,
+  reinforcement: 35
 };
 
 const TOWER_SLOTS = ['A', 'B', 'C', 'D', 'E'];
-const ENEMY_TYPES = ['runner', 'tank', 'swarm'];
-const TOWER_TYPES = ['basic', 'slow', 'burst'];
+const ENEMY_TYPES = ['runner', 'tank', 'swarm', 'healer', 'shieldBearer', 'regenerator', 'boss'];
+const TOWER_TYPES = ['basic', 'slow', 'burst', 'chain', 'sniper', 'support'];
 
 // ============================================
 // ATTACKER STRATEGIES
@@ -142,6 +168,109 @@ function attackEscalation() {
   };
 }
 
+/**
+ * Healer strategy - sustain damage with healing
+ */
+function attackHealer() {
+  return {
+    waves: [
+      { runner: 2 },              // 100
+      { healer: 1, runner: 1 },   // 130
+      { tank: 1 },                // 100
+      { healer: 1, runner: 1 },   // 130
+      { runner: 1 }               // 40 = 500 total (need to adjust)
+    ]
+  };
+}
+
+/**
+ * Armor strategy - use shieldBearers to buff allies
+ */
+function attackArmor() {
+  return {
+    waves: [
+      { runner: 2 },                   // 100
+      { shieldBearer: 1 },             // 90
+      { tank: 1 },                     // 100
+      { shieldBearer: 1, runner: 1 },  // 140
+      { runner: 1 }                    // 50 = 480 total
+    ]
+  };
+}
+
+/**
+ * Regenerator strategy - outlast tower damage
+ */
+function attackRegen() {
+  return {
+    waves: [
+      { runner: 2 },        // 100
+      { regenerator: 1 },   // 85
+      { tank: 1 },          // 100
+      { regenerator: 1 },   // 85
+      { regenerator: 1 }    // 85 = 455 total
+    ]
+  };
+}
+
+/**
+ * Boss rush - save for final wave boss
+ */
+function attackBoss() {
+  return {
+    waves: [
+      { runner: 1 },    // 50
+      { runner: 2 },    // 100
+      { swarm: 1 },     // 75
+      { runner: 1 },    // 50
+      { boss: 1 }       // 200 = 475 total
+    ],
+    powerUps: [
+      { type: 'shield', wave: 5 }  // 40 more = 515 over budget, remove
+    ]
+  };
+}
+
+/**
+ * Rush timing strategy - use wave timing to overwhelm
+ */
+function attackRushTiming() {
+  return {
+    waves: [
+      { runner: 2 },    // 100
+      { runner: 2 },    // 100
+      { swarm: 1 },     // 75
+      { tank: 1 },      // 100
+      { runner: 2 }     // 100 = 475 total
+    ],
+    waveTimings: [
+      { rush: false },  // Wave 1: normal
+      { rush: true },   // Wave 2: rush immediately
+      { rush: true },   // Wave 3: rush immediately
+      { rush: false },  // Wave 4: normal
+      { rush: true }    // Wave 5: final rush
+    ]
+  };
+}
+
+/**
+ * Power-up attack strategy - use shields and speed boosts
+ */
+function attackPowerUp() {
+  return {
+    waves: [
+      { runner: 2 },    // 100
+      { tank: 1 },      // 100
+      { runner: 2 },    // 100
+      { tank: 1 },      // 100
+      { runner: 1 }     // 50 = 450 total
+    ],
+    powerUps: [
+      { type: 'shield', wave: 2 },      // 40 = 490
+    ]
+  };
+}
+
 // ============================================
 // DEFENDER STRATEGIES
 // ============================================
@@ -259,6 +388,96 @@ function defendDPS() {
 }
 
 // ============================================
+// NEW FREE-FLOW PLACEMENT STRATEGIES
+// ============================================
+
+/**
+ * Chain defense - use chain towers for multi-target
+ */
+function defendChain() {
+  return {
+    towers: [
+      { x: 150, type: 'slow', lane: 'top' },     // 100
+      { x: 300, type: 'chain', lane: 'bottom' }, // 125
+      { x: 500, type: 'chain', lane: 'top' },    // 125
+      { x: 700, type: 'basic', lane: 'bottom' }  // 100 = 450
+    ]
+  };
+}
+
+/**
+ * Sniper defense - long range armor piercing
+ */
+function defendSniper() {
+  return {
+    towers: [
+      { x: 200, type: 'slow', lane: 'top' },     // 100
+      { x: 400, type: 'sniper', lane: 'bottom' }, // 175
+      { x: 600, type: 'sniper', lane: 'top' }    // 175 = 450
+    ]
+  };
+}
+
+/**
+ * Support cluster - buff nearby towers
+ */
+function defendSupport() {
+  return {
+    towers: [
+      { x: 100, type: 'slow', lane: 'top' },      // 100
+      { x: 200, type: 'support', lane: 'bottom' }, // 80
+      { x: 280, type: 'burst', lane: 'top' },     // 150
+      { x: 500, type: 'basic', lane: 'bottom' },  // 100 = 430
+    ]
+  };
+}
+
+/**
+ * Flex defense - mix of new tower types with free placement
+ */
+function defendFlex() {
+  return {
+    towers: [
+      { x: 100, type: 'slow', lane: 'top' },      // 100
+      { x: 250, type: 'support', lane: 'bottom' }, // 80
+      { x: 400, type: 'chain', lane: 'top' },     // 125
+      { x: 600, type: 'basic', lane: 'bottom' },  // 100 = 405
+    ]
+  };
+}
+
+/**
+ * Power-up defense - use freeze and damage boost
+ */
+function defendPowerUp() {
+  return {
+    towers: [
+      { x: 150, type: 'slow', lane: 'top' },     // 100
+      { x: 300, type: 'basic', lane: 'bottom' }, // 100
+      { x: 500, type: 'burst', lane: 'top' },    // 150
+      { x: 700, type: 'basic', lane: 'bottom' }  // 100 = 450
+    ],
+    powerUps: [
+      { type: 'freeze', wave: 5 }  // 45 = 495 total
+    ]
+  };
+}
+
+/**
+ * Dense cluster - towers close together for overlapping fire
+ */
+function defendDense() {
+  return {
+    towers: [
+      { x: 400, type: 'slow', lane: 'top' },      // 100
+      { x: 450, type: 'support', lane: 'bottom' }, // 80
+      { x: 500, type: 'burst', lane: 'top' },     // 150
+      { x: 550, type: 'basic', lane: 'bottom' },  // 100 = 430
+    ]
+  };
+}
+
+// ============================================
 // STRATEGY REGISTRY
 // ============================================
 
@@ -268,7 +487,14 @@ const ATTACK_STRATEGIES = {
   tank: attackTank,
   swarm: attackSwarm,
   balanced: attackBalanced,
-  escalation: attackEscalation
+  escalation: attackEscalation,
+  // New strategies
+  healer: attackHealer,
+  armor: attackArmor,
+  regen: attackRegen,
+  boss: attackBoss,
+  'rush-timing': attackRushTiming,
+  'power-up': attackPowerUp
 };
 
 const DEFEND_STRATEGIES = {
@@ -278,7 +504,14 @@ const DEFEND_STRATEGIES = {
   balanced: defendBalanced,
   'front-heavy': defendFrontHeavy,
   'back-heavy': defendBackHeavy,
-  dps: defendDPS
+  dps: defendDPS,
+  // New strategies (free-flow)
+  chain: defendChain,
+  sniper: defendSniper,
+  support: defendSupport,
+  flex: defendFlex,
+  'power-up': defendPowerUp,
+  dense: defendDense
 };
 
 /**
@@ -308,28 +541,54 @@ function generateDefenseBuild(strategy = 'balanced') {
 }
 
 /**
- * Calculate cost of an attack build
+ * Calculate cost of an attack build (includes power-ups)
  */
 function calculateAttackCost(build) {
   let total = 0;
+
+  // Enemy costs
   for (const wave of build.waves) {
     for (const [type, count] of Object.entries(wave)) {
       total += ENEMY_COSTS[type] * count;
     }
   }
+
+  // Power-up costs
+  if (build.powerUps) {
+    for (const powerUp of build.powerUps) {
+      total += POWER_UP_COSTS[powerUp.type] || 0;
+    }
+  }
+
   return total;
 }
 
 /**
- * Calculate cost of a defense build
+ * Calculate cost of a defense build (includes power-ups, supports free-flow)
  */
 function calculateDefenseCost(build) {
   let total = 0;
-  for (const [slot, type] of Object.entries(build.towers)) {
-    if (type) {
-      total += TOWER_COSTS[type];
+
+  // Support both array (free-flow) and object (legacy slot) formats
+  if (Array.isArray(build.towers)) {
+    for (const tower of build.towers) {
+      total += TOWER_COSTS[tower.type] || 0;
+    }
+  } else {
+    for (const [slot, type] of Object.entries(build.towers)) {
+      if (type) {
+        total += TOWER_COSTS[type];
+      }
     }
   }
+
+  // Power-up costs
+  if (build.powerUps) {
+    for (const powerUp of build.powerUps) {
+      total += POWER_UP_COSTS[powerUp.type] || 0;
+    }
+  }
+
   return total;
 }
 
@@ -360,26 +619,23 @@ async function fetchHistory(serverUrl = 'http://localhost:3000') {
 }
 
 /**
- * Counter mappings based on game mechanics
+ * Map pattern names to actual strategy names
  */
-const ATTACK_COUNTERS = {
-  // If defenders are using X, attackers should use Y
-  'slowHeavy': 'tank',      // Tanks don't care about slow
-  'burstHeavy': 'swarm',    // Swarms overwhelm single-target
-  'basicHeavy': 'balanced', // Mix works against basic DPS
-  'balanced': 'tank'        // Tanks absorb mixed damage
-};
-
-const DEFENSE_COUNTERS = {
-  // If attackers are using X, defenders should use Y
-  'tankHeavy': 'slow-wall',    // Slow keeps tanks in range longer
-  'swarmHeavy': 'dps',         // High DPS clears swarms
-  'runnerHeavy': 'burst',      // Burst catches fast runners
-  'balanced': 'balanced'       // Mirror with balanced
+const PATTERN_TO_STRATEGY = {
+  // Attacker patterns -> strategy names
+  'tankHeavy': 'tank',
+  'swarmHeavy': 'swarm',
+  'runnerHeavy': 'rush',
+  'balanced': 'balanced',
+  // Defender patterns -> strategy names
+  'slowHeavy': 'slow-wall',
+  'burstHeavy': 'burst',
+  'basicHeavy': 'dps'
 };
 
 /**
  * Get adaptive attack strategy based on match history
+ * Priority: 1) Use what's actually winning 2) Avoid what's losing 3) Explore new strategies
  */
 async function getAdaptiveAttackStrategy(serverUrl = 'http://localhost:3000') {
   const stats = await fetchHistory(serverUrl);
@@ -389,56 +645,58 @@ async function getAdaptiveAttackStrategy(serverUrl = 'http://localhost:3000') {
     return 'balanced';
   }
 
-  console.log(`\n=== ANALYZING HISTORY (${stats.totalMatches} matches) ===`);
+  console.log(`\n=== ADAPTIVE ATTACKER (${stats.totalMatches} matches) ===`);
   console.log(`Attacker win rate: ${stats.attackerWinRate}%`);
-  console.log(`Defender win rate: ${stats.defenderWinRate}%`);
 
-  // Find which defender strategy is winning most
-  const defenderPatterns = stats.patterns?.defender || {};
-  let bestDefenderStrategy = null;
-  let highestWinRate = 0;
+  const attackPatterns = stats.patterns?.attacker || {};
 
-  for (const [strategy, data] of Object.entries(defenderPatterns)) {
-    if (data.total > 0 && data.winRate > highestWinRate) {
-      highestWinRate = data.winRate;
-      bestDefenderStrategy = strategy;
-    }
-  }
+  // Step 1: Find the BEST performing attack strategy (highest win rate with >= 1 game)
+  let bestStrategy = null;
+  let bestWinRate = -1;
+  let worstStrategy = null;
+  let worstWinRate = 101;
 
-  if (bestDefenderStrategy && highestWinRate > 50) {
-    const counter = ATTACK_COUNTERS[bestDefenderStrategy] || 'balanced';
-    console.log(`Defenders winning with ${bestDefenderStrategy} (${highestWinRate}%)`);
-    console.log(`Counter-strategy: ${counter}`);
-    return counter;
-  }
-
-  // If attackers are losing, try something different
-  if (stats.attackerWinRate < 40) {
-    // Find which attack strategy is winning most
-    const attackPatterns = stats.patterns?.attacker || {};
-    let bestAttackStrategy = 'tank'; // Default to tank if losing
-    let bestWinRate = 0;
-
-    for (const [strategy, data] of Object.entries(attackPatterns)) {
-      if (data.total > 0 && data.winRate > bestWinRate) {
+  for (const [pattern, data] of Object.entries(attackPatterns)) {
+    if (data.total > 0) {
+      console.log(`  ${pattern}: ${data.wins}/${data.total} (${data.winRate}%)`);
+      if (data.winRate > bestWinRate) {
         bestWinRate = data.winRate;
-        bestAttackStrategy = strategy.replace('Heavy', '');
+        bestStrategy = pattern;
+      }
+      if (data.winRate < worstWinRate) {
+        worstWinRate = data.winRate;
+        worstStrategy = pattern;
       }
     }
-
-    console.log(`Attackers struggling (${stats.attackerWinRate}% win rate)`);
-    console.log(`Best performing: ${bestAttackStrategy}`);
-    return bestAttackStrategy === 'tank' ? 'tank' :
-           bestAttackStrategy === 'swarm' ? 'swarm' :
-           bestAttackStrategy === 'runner' ? 'rush' : 'tank';
   }
 
-  console.log('No clear pattern - using balanced');
-  return 'balanced';
+  // Step 2: If we have a winning strategy, USE IT
+  if (bestStrategy && bestWinRate > 0) {
+    const strategyName = PATTERN_TO_STRATEGY[bestStrategy] || 'balanced';
+    console.log(`>>> Best strategy: ${bestStrategy} (${bestWinRate}%) -> using "${strategyName}"`);
+    return strategyName;
+  }
+
+  // Step 3: If everything is losing, try something we haven't tried much
+  const triedPatterns = Object.keys(attackPatterns).filter(p => attackPatterns[p].total > 0);
+  const allPatterns = ['tankHeavy', 'swarmHeavy', 'runnerHeavy', 'balanced'];
+  const untriedPatterns = allPatterns.filter(p => !triedPatterns.includes(p) || attackPatterns[p]?.total < 2);
+
+  if (untriedPatterns.length > 0) {
+    const tryPattern = untriedPatterns[Math.floor(Math.random() * untriedPatterns.length)];
+    const strategyName = PATTERN_TO_STRATEGY[tryPattern] || 'tank';
+    console.log(`>>> Exploring untried: ${tryPattern} -> using "${strategyName}"`);
+    return strategyName;
+  }
+
+  // Step 4: Default to tank (high HP tends to break through)
+  console.log(`>>> Defaulting to tank strategy`);
+  return 'tank';
 }
 
 /**
  * Get adaptive defense strategy based on match history
+ * Priority: 1) Use what's actually winning 2) Counter what attackers are using 3) Explore
  */
 async function getAdaptiveDefenseStrategy(serverUrl = 'http://localhost:3000') {
   const stats = await fetchHistory(serverUrl);
@@ -448,38 +706,44 @@ async function getAdaptiveDefenseStrategy(serverUrl = 'http://localhost:3000') {
     return 'balanced';
   }
 
-  console.log(`\n=== ANALYZING HISTORY (${stats.totalMatches} matches) ===`);
-  console.log(`Attacker win rate: ${stats.attackerWinRate}%`);
+  console.log(`\n=== ADAPTIVE DEFENDER (${stats.totalMatches} matches) ===`);
   console.log(`Defender win rate: ${stats.defenderWinRate}%`);
 
-  // Find which attacker strategy is winning most
-  const attackerPatterns = stats.patterns?.attacker || {};
-  let bestAttackerStrategy = null;
-  let highestWinRate = 0;
+  const defenderPatterns = stats.patterns?.defender || {};
 
-  for (const [strategy, data] of Object.entries(attackerPatterns)) {
-    if (data.total > 0 && data.winRate > highestWinRate) {
-      highestWinRate = data.winRate;
-      bestAttackerStrategy = strategy;
+  // Step 1: Find the BEST performing defense strategy
+  let bestStrategy = null;
+  let bestWinRate = -1;
+
+  for (const [pattern, data] of Object.entries(defenderPatterns)) {
+    if (data.total > 0) {
+      console.log(`  ${pattern}: ${data.wins}/${data.total} (${data.winRate}%)`);
+      if (data.winRate > bestWinRate) {
+        bestWinRate = data.winRate;
+        bestStrategy = pattern;
+      }
     }
   }
 
-  if (bestAttackerStrategy && highestWinRate > 50) {
-    const counter = DEFENSE_COUNTERS[bestAttackerStrategy] || 'balanced';
-    console.log(`Attackers winning with ${bestAttackerStrategy} (${highestWinRate}%)`);
-    console.log(`Counter-strategy: ${counter}`);
-    return counter;
+  // Step 2: If we have a winning strategy, USE IT
+  if (bestStrategy && bestWinRate > 50) {
+    const strategyName = PATTERN_TO_STRATEGY[bestStrategy] || 'balanced';
+    console.log(`>>> Best strategy: ${bestStrategy} (${bestWinRate}%) -> using "${strategyName}"`);
+    return strategyName;
   }
 
-  // If defenders are losing, try something different
-  if (stats.defenderWinRate < 40) {
-    console.log(`Defenders struggling (${stats.defenderWinRate}% win rate)`);
-    console.log(`Trying slow-wall to maximize enemy time in range`);
-    return 'slow-wall';
+  // Step 3: If defenders are struggling, try new tower types
+  if (stats.defenderWinRate < 50) {
+    // Try the new free-flow strategies
+    const newStrategies = ['chain', 'sniper', 'support', 'dense', 'flex'];
+    const tryStrategy = newStrategies[Math.floor(Math.random() * newStrategies.length)];
+    console.log(`>>> Defenders struggling, trying new strategy: ${tryStrategy}`);
+    return tryStrategy;
   }
 
-  console.log('No clear pattern - using balanced');
-  return 'balanced';
+  // Step 4: Default to burst (high damage)
+  console.log(`>>> Defaulting to burst strategy`);
+  return 'burst';
 }
 
 module.exports = {

@@ -5,11 +5,17 @@ const {
   VALID_TOWER_TYPES,
   VALID_ENEMY_TYPES,
   ENEMY_STATS,
-  TOWER_STATS
+  TOWER_STATS,
+  FREE_PLACEMENT,
+  WAVE_TIMING,
+  POWER_UP_COSTS,
+  POWER_UP_LIMITS,
+  VALID_ATTACKER_POWERUPS,
+  VALID_DEFENDER_POWERUPS
 } = require('../simulation/constants');
 
 /**
- * Calculate total cost of an attack build
+ * Calculate total cost of an attack build (including power-ups)
  */
 function calculateAttackCost(build) {
   if (!build || !build.waves) return 0;
@@ -25,21 +31,13 @@ function calculateAttackCost(build) {
     }
   }
 
-  return total;
-}
-
-/**
- * Calculate total cost of a defense build
- */
-function calculateDefenseCost(build) {
-  if (!build || !build.towers) return 0;
-
-  let total = 0;
-
-  for (const [slot, type] of Object.entries(build.towers)) {
-    const stats = TOWER_STATS[type];
-    if (stats) {
-      total += stats.cost;
+  // Add power-up costs
+  if (build.powerUps && Array.isArray(build.powerUps)) {
+    for (const powerUp of build.powerUps) {
+      const cost = POWER_UP_COSTS[powerUp.type];
+      if (cost) {
+        total += cost;
+      }
     }
   }
 
@@ -47,8 +45,134 @@ function calculateDefenseCost(build) {
 }
 
 /**
- * Validate an attack build
- * Returns { valid: true } or { valid: false, error: 'message' }
+ * Calculate total cost of a defense build (supports both formats)
+ */
+function calculateDefenseCost(build) {
+  if (!build || !build.towers) return 0;
+
+  let total = 0;
+
+  // Check if it's the new array format
+  if (Array.isArray(build.towers)) {
+    for (const tower of build.towers) {
+      const stats = TOWER_STATS[tower.type];
+      if (stats) {
+        total += stats.cost;
+      }
+    }
+  } else {
+    // Legacy object format
+    for (const [slot, type] of Object.entries(build.towers)) {
+      const stats = TOWER_STATS[type];
+      if (stats) {
+        total += stats.cost;
+      }
+    }
+  }
+
+  // Add power-up costs
+  if (build.powerUps && Array.isArray(build.powerUps)) {
+    for (const powerUp of build.powerUps) {
+      const cost = POWER_UP_COSTS[powerUp.type];
+      if (cost) {
+        total += cost;
+      }
+    }
+  }
+
+  return total;
+}
+
+/**
+ * Validate power-ups for either side
+ */
+function validatePowerUps(powerUps, side) {
+  if (!powerUps) {
+    return { valid: true };  // Power-ups are optional
+  }
+
+  if (!Array.isArray(powerUps)) {
+    return { valid: false, error: 'powerUps must be an array' };
+  }
+
+  const validTypes = side === 'attack' ? VALID_ATTACKER_POWERUPS : VALID_DEFENDER_POWERUPS;
+  const perWaveCount = {};
+  let totalCost = 0;
+
+  // Check total limit
+  if (powerUps.length > POWER_UP_LIMITS.perMatch) {
+    return { valid: false, error: `Maximum ${POWER_UP_LIMITS.perMatch} power-ups per match` };
+  }
+
+  for (let i = 0; i < powerUps.length; i++) {
+    const powerUp = powerUps[i];
+
+    // Check type is valid
+    if (!powerUp.type || !validTypes.includes(powerUp.type)) {
+      return { valid: false, error: `Invalid ${side}er power-up: '${powerUp.type}'. Valid: ${validTypes.join(', ')}` };
+    }
+
+    // Check wave is valid
+    if (typeof powerUp.wave !== 'number' || powerUp.wave < 1 || powerUp.wave > TOTAL_WAVES) {
+      return { valid: false, error: `Power-up wave must be 1-${TOTAL_WAVES}` };
+    }
+
+    // Check per-wave limit
+    perWaveCount[powerUp.wave] = (perWaveCount[powerUp.wave] || 0) + 1;
+    if (perWaveCount[powerUp.wave] > POWER_UP_LIMITS.perWave) {
+      return { valid: false, error: `Maximum ${POWER_UP_LIMITS.perWave} power-up per wave` };
+    }
+
+    totalCost += POWER_UP_COSTS[powerUp.type];
+  }
+
+  return { valid: true, powerUpCost: totalCost };
+}
+
+/**
+ * Validate wave timings
+ */
+function validateWaveTimings(waveTimings) {
+  if (!waveTimings) {
+    return { valid: true };  // Wave timings are optional
+  }
+
+  if (!Array.isArray(waveTimings)) {
+    return { valid: false, error: 'waveTimings must be an array' };
+  }
+
+  if (waveTimings.length !== TOTAL_WAVES) {
+    return { valid: false, error: `waveTimings must have ${TOTAL_WAVES} entries` };
+  }
+
+  for (let i = 0; i < waveTimings.length; i++) {
+    const timing = waveTimings[i];
+
+    if (typeof timing !== 'object') {
+      return { valid: false, error: `Wave ${i + 1} timing must be an object` };
+    }
+
+    // Check rush flag
+    if (timing.rush !== undefined && typeof timing.rush !== 'boolean') {
+      return { valid: false, error: `Wave ${i + 1} timing.rush must be boolean` };
+    }
+
+    // Check delay
+    if (timing.delay !== undefined) {
+      if (typeof timing.delay !== 'number') {
+        return { valid: false, error: `Wave ${i + 1} timing.delay must be a number` };
+      }
+      if (timing.delay < WAVE_TIMING.minWaveDelay || timing.delay > WAVE_TIMING.maxWaveDelay) {
+        return { valid: false, error: `Wave ${i + 1} delay must be ${WAVE_TIMING.minWaveDelay}-${WAVE_TIMING.maxWaveDelay} ticks` };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate an attack build with new features
  */
 function validateAttackBuild(build) {
   // Check build exists
@@ -92,6 +216,18 @@ function validateAttackBuild(build) {
     }
   }
 
+  // Validate wave timings (optional)
+  const timingResult = validateWaveTimings(build.waveTimings);
+  if (!timingResult.valid) {
+    return timingResult;
+  }
+
+  // Validate power-ups (optional)
+  const powerUpResult = validatePowerUps(build.powerUps, 'attack');
+  if (!powerUpResult.valid) {
+    return powerUpResult;
+  }
+
   // Check budget
   const totalCost = calculateAttackCost(build);
   if (totalCost > BUDGET) {
@@ -102,8 +238,63 @@ function validateAttackBuild(build) {
 }
 
 /**
- * Validate a defense build
- * Returns { valid: true } or { valid: false, error: 'message' }
+ * Validate free-flow tower placement
+ */
+function validateFreeFlowTowers(towers) {
+  if (!Array.isArray(towers)) {
+    return { valid: false, error: 'towers must be an array for free-flow placement' };
+  }
+
+  if (towers.length === 0) {
+    return { valid: false, error: 'Must place at least one tower' };
+  }
+
+  const positions = [];
+  let totalCost = 0;
+
+  for (let i = 0; i < towers.length; i++) {
+    const tower = towers[i];
+
+    // Check tower has required fields
+    if (!tower || typeof tower !== 'object') {
+      return { valid: false, error: `Tower ${i + 1} must be an object` };
+    }
+
+    // Validate position
+    if (typeof tower.x !== 'number') {
+      return { valid: false, error: `Tower ${i + 1}: x position is required` };
+    }
+
+    if (tower.x < FREE_PLACEMENT.minX || tower.x > FREE_PLACEMENT.maxX) {
+      return { valid: false, error: `Tower ${i + 1}: x position must be ${FREE_PLACEMENT.minX}-${FREE_PLACEMENT.maxX}` };
+    }
+
+    // Validate type
+    if (!tower.type || !VALID_TOWER_TYPES.includes(tower.type)) {
+      return { valid: false, error: `Tower ${i + 1}: invalid type '${tower.type}'. Valid: ${VALID_TOWER_TYPES.join(', ')}` };
+    }
+
+    // Check minimum spacing
+    for (let j = 0; j < positions.length; j++) {
+      if (Math.abs(tower.x - positions[j]) < FREE_PLACEMENT.minSpacing) {
+        return { valid: false, error: `Tower ${i + 1}: too close to another tower (min spacing: ${FREE_PLACEMENT.minSpacing})` };
+      }
+    }
+    positions.push(tower.x);
+
+    // Validate lane (optional)
+    if (tower.lane && !FREE_PLACEMENT.lanes.includes(tower.lane)) {
+      return { valid: false, error: `Tower ${i + 1}: lane must be 'top' or 'bottom'` };
+    }
+
+    totalCost += TOWER_STATS[tower.type].cost;
+  }
+
+  return { valid: true, cost: totalCost };
+}
+
+/**
+ * Validate a defense build (supports both legacy and free-flow)
  */
 function validateDefenseBuild(build) {
   // Check build exists
@@ -111,34 +302,51 @@ function validateDefenseBuild(build) {
     return { valid: false, error: 'Build is required' };
   }
 
-  // Check towers object
-  if (!build.towers || typeof build.towers !== 'object') {
-    return { valid: false, error: 'Build must have a towers object' };
+  // Check towers exists
+  if (!build.towers) {
+    return { valid: false, error: 'Build must have towers' };
   }
 
-  // Check at least one tower
-  const towerEntries = Object.entries(build.towers).filter(([, type]) => type);
-  if (towerEntries.length === 0) {
-    return { valid: false, error: 'Must place at least one tower' };
-  }
+  let towerCost = 0;
 
-  // Validate each tower
-  for (const [slot, type] of Object.entries(build.towers)) {
-    // Skip empty slots
-    if (!type) continue;
-
-    // Check slot is valid
-    if (!VALID_SLOTS.includes(slot)) {
-      return { valid: false, error: `Invalid tower slot '${slot}'. Valid slots: ${VALID_SLOTS.join(', ')}` };
+  // Check if it's the new array format (free-flow)
+  if (Array.isArray(build.towers)) {
+    const result = validateFreeFlowTowers(build.towers);
+    if (!result.valid) {
+      return result;
+    }
+    towerCost = result.cost;
+  } else if (typeof build.towers === 'object') {
+    // Legacy slot-based format
+    const towerEntries = Object.entries(build.towers).filter(([, type]) => type);
+    if (towerEntries.length === 0) {
+      return { valid: false, error: 'Must place at least one tower' };
     }
 
-    // Check tower type is valid
-    if (!VALID_TOWER_TYPES.includes(type)) {
-      return { valid: false, error: `Invalid tower type '${type}' at slot ${slot}. Valid types: ${VALID_TOWER_TYPES.join(', ')}` };
+    for (const [slot, type] of Object.entries(build.towers)) {
+      if (!type) continue;
+
+      if (!VALID_SLOTS.includes(slot)) {
+        return { valid: false, error: `Invalid tower slot '${slot}'. Valid slots: ${VALID_SLOTS.join(', ')}` };
+      }
+
+      if (!VALID_TOWER_TYPES.includes(type)) {
+        return { valid: false, error: `Invalid tower type '${type}' at slot ${slot}. Valid: ${VALID_TOWER_TYPES.join(', ')}` };
+      }
+
+      towerCost += TOWER_STATS[type].cost;
     }
+  } else {
+    return { valid: false, error: 'towers must be an object or array' };
   }
 
-  // Check budget
+  // Validate power-ups (optional)
+  const powerUpResult = validatePowerUps(build.powerUps, 'defend');
+  if (!powerUpResult.valid) {
+    return powerUpResult;
+  }
+
+  // Calculate total cost including power-ups
   const totalCost = calculateDefenseCost(build);
   if (totalCost > BUDGET) {
     return { valid: false, error: `Budget exceeded: ${totalCost}/${BUDGET} points` };
@@ -178,5 +386,8 @@ module.exports = {
   calculateDefenseCost,
   validateAttackBuild,
   validateDefenseBuild,
+  validateFreeFlowTowers,
+  validatePowerUps,
+  validateWaveTimings,
   validateSubmission
 };

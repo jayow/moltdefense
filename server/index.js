@@ -9,6 +9,11 @@ const matchRouter = require('./api/match');
 const resultsRouter = require('./api/results');
 const demoRouter = require('./api/demo');
 const historyRouter = require('./api/history');
+const statsRouter = require('./api/stats');
+const leaderboardRouter = require('./api/leaderboard');
+const dashboardRouter = require('./api/dashboard');
+const learningRouter = require('./api/learning');
+const replayRouter = require('./api/replay');
 const { setMatchUpdateCallback, getQueueStats, setMatchSpeed } = require('./matchmaker');
 
 // Create Express app
@@ -34,6 +39,11 @@ app.use('/match', matchRouter);
 app.use('/results', resultsRouter);
 app.use('/demo', demoRouter);
 app.use('/history', historyRouter);
+app.use('/stats', statsRouter);
+app.use('/leaderboard', leaderboardRouter);
+app.use('/dashboard', dashboardRouter);
+app.use('/learning', learningRouter);
+app.use('/replay', replayRouter);
 
 // Queue status endpoint
 app.get('/status', (req, res) => {
@@ -140,12 +150,17 @@ server.listen(PORT, () => {
 ║  Server running on http://localhost:${PORT}                  ║
 ║                                                           ║
 ║  Endpoints:                                               ║
-║    POST /submit      - Submit a build                     ║
-║    POST /demo        - Start demo match                   ║
-║    GET  /match/:id   - Get match state                    ║
-║    GET  /results/:id - Get match results                  ║
-║    GET  /history     - Match history for strategy         ║
-║    GET  /status      - Queue status                       ║
+║    POST /submit       - Submit a build                    ║
+║    POST /demo         - Start demo match                  ║
+║    GET  /dashboard    - Homepage data (leaderboard/stats) ║
+║    GET  /leaderboard  - ELO rankings                      ║
+║    GET  /learning/*   - Agent learning API                ║
+║    GET  /replay/:id   - Match replay data                 ║
+║    GET  /match/:id    - Get match state                   ║
+║    GET  /results/:id  - Get match results                 ║
+║    GET  /history      - Match history                     ║
+║    GET  /stats        - Game balance statistics           ║
+║    GET  /status       - Queue status                      ║
 ║                                                           ║
 ║  WebSocket: ws://localhost:${PORT}                           ║
 ╚═══════════════════════════════════════════════════════════╝
