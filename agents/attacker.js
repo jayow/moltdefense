@@ -13,7 +13,7 @@
  *   --help             Show help
  */
 
-const { generateAttackBuild, calculateAttackCost, ATTACK_STRATEGIES, getRandomStrategy } = require('./strategies');
+const { generateAttackBuild, calculateAttackCost, ATTACK_STRATEGIES, getRandomStrategy, getAdaptiveAttackStrategy } = require('./strategies');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -21,7 +21,8 @@ const options = {
   strategy: 'balanced',
   name: `attacker_${Math.random().toString(36).slice(2, 8)}`,
   server: 'http://localhost:3000',
-  quiet: false
+  quiet: false,
+  adaptive: false
 };
 
 for (let i = 0; i < args.length; i++) {
@@ -41,6 +42,10 @@ for (let i = 0; i < args.length; i++) {
     case '-q':
       options.quiet = true;
       break;
+    case '--adaptive':
+    case '-a':
+      options.adaptive = true;
+      break;
     case '--help':
     case '-h':
       console.log(`
@@ -50,6 +55,7 @@ Usage: node attacker.js [options]
 
 Options:
   --strategy, -s <name>  Strategy to use (default: balanced)
+  --adaptive, -a         Use adaptive strategy based on match history
   --name, -n <name>      Agent name (default: random)
   --server <url>         Server URL (default: http://localhost:3000)
   --quiet, -q            Minimal output
@@ -72,8 +78,15 @@ function log(...args) {
 async function main() {
   log(`\n=== MOLTDEFENSE ATTACKER AGENT ===`);
   log(`Agent: ${options.name}`);
-  log(`Strategy: ${options.strategy}`);
   log(`Server: ${options.server}`);
+
+  // Determine strategy
+  if (options.adaptive) {
+    log('Mode: ADAPTIVE (analyzing match history...)');
+    options.strategy = await getAdaptiveAttackStrategy(options.server);
+  }
+
+  log(`Strategy: ${options.strategy}`);
   log('');
 
   // Generate build

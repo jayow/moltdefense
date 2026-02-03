@@ -342,12 +342,155 @@ function getRandomStrategy(side) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
+// ============================================
+// ADAPTIVE STRATEGIES (based on match history)
+// ============================================
+
+/**
+ * Fetch match history from server
+ */
+async function fetchHistory(serverUrl = 'http://localhost:3000') {
+  try {
+    const response = await fetch(`${serverUrl}/history/stats`);
+    return await response.json();
+  } catch (error) {
+    console.log('Could not fetch history, using random strategy');
+    return null;
+  }
+}
+
+/**
+ * Counter mappings based on game mechanics
+ */
+const ATTACK_COUNTERS = {
+  // If defenders are using X, attackers should use Y
+  'slowHeavy': 'tank',      // Tanks don't care about slow
+  'burstHeavy': 'swarm',    // Swarms overwhelm single-target
+  'basicHeavy': 'balanced', // Mix works against basic DPS
+  'balanced': 'tank'        // Tanks absorb mixed damage
+};
+
+const DEFENSE_COUNTERS = {
+  // If attackers are using X, defenders should use Y
+  'tankHeavy': 'slow-wall',    // Slow keeps tanks in range longer
+  'swarmHeavy': 'dps',         // High DPS clears swarms
+  'runnerHeavy': 'burst',      // Burst catches fast runners
+  'balanced': 'balanced'       // Mirror with balanced
+};
+
+/**
+ * Get adaptive attack strategy based on match history
+ */
+async function getAdaptiveAttackStrategy(serverUrl = 'http://localhost:3000') {
+  const stats = await fetchHistory(serverUrl);
+
+  if (!stats || stats.totalMatches === 0) {
+    console.log('No history - using balanced strategy');
+    return 'balanced';
+  }
+
+  console.log(`\n=== ANALYZING HISTORY (${stats.totalMatches} matches) ===`);
+  console.log(`Attacker win rate: ${stats.attackerWinRate}%`);
+  console.log(`Defender win rate: ${stats.defenderWinRate}%`);
+
+  // Find which defender strategy is winning most
+  const defenderPatterns = stats.patterns?.defender || {};
+  let bestDefenderStrategy = null;
+  let highestWinRate = 0;
+
+  for (const [strategy, data] of Object.entries(defenderPatterns)) {
+    if (data.total > 0 && data.winRate > highestWinRate) {
+      highestWinRate = data.winRate;
+      bestDefenderStrategy = strategy;
+    }
+  }
+
+  if (bestDefenderStrategy && highestWinRate > 50) {
+    const counter = ATTACK_COUNTERS[bestDefenderStrategy] || 'balanced';
+    console.log(`Defenders winning with ${bestDefenderStrategy} (${highestWinRate}%)`);
+    console.log(`Counter-strategy: ${counter}`);
+    return counter;
+  }
+
+  // If attackers are losing, try something different
+  if (stats.attackerWinRate < 40) {
+    // Find which attack strategy is winning most
+    const attackPatterns = stats.patterns?.attacker || {};
+    let bestAttackStrategy = 'tank'; // Default to tank if losing
+    let bestWinRate = 0;
+
+    for (const [strategy, data] of Object.entries(attackPatterns)) {
+      if (data.total > 0 && data.winRate > bestWinRate) {
+        bestWinRate = data.winRate;
+        bestAttackStrategy = strategy.replace('Heavy', '');
+      }
+    }
+
+    console.log(`Attackers struggling (${stats.attackerWinRate}% win rate)`);
+    console.log(`Best performing: ${bestAttackStrategy}`);
+    return bestAttackStrategy === 'tank' ? 'tank' :
+           bestAttackStrategy === 'swarm' ? 'swarm' :
+           bestAttackStrategy === 'runner' ? 'rush' : 'tank';
+  }
+
+  console.log('No clear pattern - using balanced');
+  return 'balanced';
+}
+
+/**
+ * Get adaptive defense strategy based on match history
+ */
+async function getAdaptiveDefenseStrategy(serverUrl = 'http://localhost:3000') {
+  const stats = await fetchHistory(serverUrl);
+
+  if (!stats || stats.totalMatches === 0) {
+    console.log('No history - using balanced strategy');
+    return 'balanced';
+  }
+
+  console.log(`\n=== ANALYZING HISTORY (${stats.totalMatches} matches) ===`);
+  console.log(`Attacker win rate: ${stats.attackerWinRate}%`);
+  console.log(`Defender win rate: ${stats.defenderWinRate}%`);
+
+  // Find which attacker strategy is winning most
+  const attackerPatterns = stats.patterns?.attacker || {};
+  let bestAttackerStrategy = null;
+  let highestWinRate = 0;
+
+  for (const [strategy, data] of Object.entries(attackerPatterns)) {
+    if (data.total > 0 && data.winRate > highestWinRate) {
+      highestWinRate = data.winRate;
+      bestAttackerStrategy = strategy;
+    }
+  }
+
+  if (bestAttackerStrategy && highestWinRate > 50) {
+    const counter = DEFENSE_COUNTERS[bestAttackerStrategy] || 'balanced';
+    console.log(`Attackers winning with ${bestAttackerStrategy} (${highestWinRate}%)`);
+    console.log(`Counter-strategy: ${counter}`);
+    return counter;
+  }
+
+  // If defenders are losing, try something different
+  if (stats.defenderWinRate < 40) {
+    console.log(`Defenders struggling (${stats.defenderWinRate}% win rate)`);
+    console.log(`Trying slow-wall to maximize enemy time in range`);
+    return 'slow-wall';
+  }
+
+  console.log('No clear pattern - using balanced');
+  return 'balanced';
+}
+
 module.exports = {
   generateAttackBuild,
   generateDefenseBuild,
   calculateAttackCost,
   calculateDefenseCost,
   getRandomStrategy,
+  getAdaptiveAttackStrategy,
+  getAdaptiveDefenseStrategy,
+  fetchHistory,
   ATTACK_STRATEGIES: Object.keys(ATTACK_STRATEGIES),
   DEFEND_STRATEGIES: Object.keys(DEFEND_STRATEGIES)
 };
