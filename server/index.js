@@ -7,11 +7,6 @@ const path = require('path');
 
 // Security configuration
 const SECURITY_CONFIG = {
-  // Allowed origins for CORS (add production domains as needed)
-  allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-  ],
   // Rate limiting (relaxed for development, tighten for production)
   rateLimit: {
     windowMs: 1 * 60 * 1000, // 1 minute
@@ -50,17 +45,10 @@ const wss = new WebSocketServer({ server });
 // Match subscribers: Map<matchId, Set<WebSocket>>
 const matchSubscribers = new Map();
 
-// Middleware - Security hardened
-// CORS: Restrict to allowed origins
+// Middleware
+// CORS: Allow all origins for public API (AI agents connect from anywhere)
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (SECURITY_CONFIG.allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true,  // Reflect the request origin (allows any origin)
   methods: ['GET', 'POST'],
   credentials: true
 }));

@@ -895,15 +895,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Poll dashboard every 5 seconds
   setInterval(fetchDashboard, 5000);
 
-  // Set up button handlers
-  document.getElementById('demo-btn').addEventListener('click', () => {
-    runDemoMatch(false);
-  });
-
-  document.getElementById('adaptive-demo-btn').addEventListener('click', () => {
-    runDemoMatch(true);
-  });
-
   // Sound FX toggle button
   const sfxBtn = document.getElementById('sfx-btn');
   if (sfxBtn) {
