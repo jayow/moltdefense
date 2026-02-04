@@ -1,232 +1,142 @@
-// ============================================
-// CORE GAME SETTINGS
-// ============================================
-const TICKS_PER_SECOND = 60;
-const PATH_LENGTH = 1000;
-const TOWER_RANGE = 90;   // Default tower range (reduced for balance)
-const BUDGET = 500;
-const TOTAL_WAVES = 5;
-const SLOW_DECAY_RATE = 0.03; // Per tick (faster decay - 2 sec to full speed)
+/**
+ * Constants - Game configuration values
+ *
+ * IMPORTANT: This file now imports from GameConfig for centralized configuration.
+ * All values are derived from /server/config/game-config.js
+ *
+ * This file is maintained for backward compatibility with existing code.
+ * New code should import directly from game-config.js when possible.
+ */
+
+const { getConfig } = require('../config/game-config');
+
+// Get configuration
+const _config = getConfig();
 
 // ============================================
-// FREE-FLOW PLACEMENT SETTINGS
+// CORE GAME SETTINGS (from GameConfig)
+// ============================================
+const TICKS_PER_SECOND = _config.core.ticksPerSecond;
+const PATH_LENGTH = _config.core.pathLength;
+const TOWER_RANGE = _config.core.defaultTowerRange;
+const BUDGET = _config.budget.attack; // Both sides have same budget
+const TOTAL_WAVES = _config.rules.wavesPerMatch;
+const SLOW_DECAY_RATE = _config.core.slowDecayRate;
+
+// ============================================
+// FREE-FLOW PLACEMENT SETTINGS (from GameConfig)
 // ============================================
 const FREE_PLACEMENT = {
-  enabled: true,
-  minSpacing: 50,      // Minimum distance between towers
-  minX: 50,            // Left boundary
-  maxX: 950,           // Right boundary
-  lanes: ['top', 'bottom']
+  enabled: _config.map.freePlacement.enabled,
+  minSpacing: _config.rules.minTowerSpacing,
+  minX: _config.map.freePlacement.minX,
+  maxX: _config.map.freePlacement.maxX,
+  lanes: _config.map.lanes
 };
 
-// Legacy tower positions (backward compatibility)
-const TOWER_POSITIONS = {
-  A: 100,
-  B: 300,
-  C: 500,
-  D: 700,
-  E: 900
-};
+// Legacy tower positions (from GameConfig map.towerZones)
+const TOWER_POSITIONS = {};
+_config.map.towerZones.forEach(zone => {
+  TOWER_POSITIONS[zone.id] = zone.x;
+});
 
-const VALID_SLOTS = ['A', 'B', 'C', 'D', 'E'];
+const VALID_SLOTS = _config.map.towerZones.map(zone => zone.id);
 
 // ============================================
-// WAVE TIMING SETTINGS
+// WAVE TIMING SETTINGS (from GameConfig)
 // ============================================
 const WAVE_TIMING = {
-  baseDelay: 180,           // 3 seconds (180 ticks) between waves
-  rushBonusPerTick: 0.1,    // Budget bonus per tick rushed early
-  maxRushBonus: 30,         // Maximum bonus budget for rushing per wave
-  minWaveDelay: 30,         // Minimum 0.5 second delay
-  maxWaveDelay: 600         // Maximum 10 second delay
+  baseDelay: _config.rules.waveDelay,
+  rushBonusPerTick: _config.rules.rushBonusPerTick,
+  maxRushBonus: _config.rules.maxRushBonus,
+  minWaveDelay: _config.rules.minWaveDelay,
+  maxWaveDelay: _config.rules.maxWaveDelay
 };
 
 // ============================================
-// POWER-UP SETTINGS
+// POWER-UP SETTINGS (from GameConfig)
 // ============================================
-const POWER_UP_COSTS = {
-  // Attacker power-ups
-  shield: 40,           // Absorbs damage before HP
-  speedBoost: 25,       // Temporary speed increase
-  invisibility: 50,     // Invisible to towers temporarily
-  healPulse: 35,        // Heal nearby enemies
+const POWER_UP_COSTS = {};
+const POWER_UP_DURATION = {};
+const POWER_UP_EFFECTS = {};
 
-  // Defender power-ups
-  damageBoost: 30,      // All towers deal +50% damage
-  freeze: 45,           // Full stop all enemies
-  chainLightning: 40,   // Jump damage between enemies
-  reinforcement: 35     // Spawn temporary tower
-};
+// Build power-up constants from GameConfig
+Object.entries(_config.powerUps).forEach(([name, config]) => {
+  POWER_UP_COSTS[name] = config.cost;
+  POWER_UP_DURATION[name] = config.duration;
 
-const POWER_UP_DURATION = {
-  shield: 120,          // 2 seconds
-  speedBoost: 90,       // 1.5 seconds
-  invisibility: 60,     // 1 second
-  damageBoost: 120,     // 2 seconds
-  freeze: 45,           // 0.75 seconds
-  reinforcement: 180    // 3 seconds
-};
-
-const POWER_UP_EFFECTS = {
-  speedBoost: 1.5,      // 50% speed increase
-  damageBoost: 1.5,     // 50% damage increase
-  healPulse: {
-    amount: 30,
-    radius: 100
-  },
-  chainLightning: {
-    damage: 25,
-    jumps: 5,
-    decay: 0.8
-  },
-  reinforcement: {
-    type: 'basic',
-    position: 500       // Middle of path
+  // Effect-specific properties
+  if (config.effect) {
+    POWER_UP_EFFECTS[name] = config.effect;
+  } else if (name === 'healPulse') {
+    POWER_UP_EFFECTS[name] = { amount: config.healAmount, radius: config.radius };
+  } else if (name === 'chainLightning') {
+    POWER_UP_EFFECTS[name] = { damage: config.damage, jumps: config.jumps, decay: config.decay };
+  } else if (name === 'reinforcement') {
+    POWER_UP_EFFECTS[name] = { type: config.towerType, position: config.position };
   }
-};
+});
 
 const POWER_UP_LIMITS = {
-  perMatch: 3,          // Max power-ups per match per side
-  perWave: 1            // Max power-ups per wave
+  perMatch: _config.rules.maxPowerUpsPerMatch,
+  perWave: _config.rules.maxPowerUpsPerWave
 };
 
-const VALID_ATTACKER_POWERUPS = ['shield', 'speedBoost', 'invisibility', 'healPulse'];
-const VALID_DEFENDER_POWERUPS = ['damageBoost', 'freeze', 'chainLightning', 'reinforcement'];
+const VALID_ATTACKER_POWERUPS = Object.entries(_config.powerUps)
+  .filter(([_, c]) => c.side === 'attack')
+  .map(([name]) => name);
+
+const VALID_DEFENDER_POWERUPS = Object.entries(_config.powerUps)
+  .filter(([_, c]) => c.side === 'defense')
+  .map(([name]) => name);
 
 // ============================================
-// ENEMY STATS
+// ENEMY STATS (from GameConfig)
 // ============================================
-const ENEMY_STATS = {
-  // Original enemies
-  runner: {
-    hp: 90,             // Buffed from 75 (more survivable)
-    speed: 52.0,        // Slightly faster
-    cost: 50,
-    armor: 0,
-    regen: 0,
-    aura: null
-  },
-  tank: {
-    hp: 320,            // Final balance
-    speed: 18.0,        // Faster (was 15)
-    cost: 100,
-    armor: 3,           // Lower armor
-    regen: 0,
-    aura: null
-  },
-  swarm: {
-    hp: 45,             // Buffed from 38
-    speed: 38.0,        // Faster
-    cost: 75,
-    unitCount: 5,
-    armor: 0,
-    regen: 0,
-    aura: null
-  },
+const ENEMY_STATS = {};
 
-  // New enemies
-  healer: {
-    hp: 55,
-    speed: 25.0,
-    cost: 80,
-    armor: 0,
-    regen: 0,
-    aura: 'heal',
-    auraRadius: 80,
-    auraAmount: 0.05    // ~3 HP/sec to nearby allies (was 120 HP/sec!)
-  },
-  shieldBearer: {
-    hp: 100,            // Reduced from 120
-    speed: 20.0,
-    cost: 90,
-    armor: 2,           // Reduced from 3
-    regen: 0,
-    aura: 'armor',
-    auraRadius: 60,
-    auraAmount: 1       // Reduced bonus armor (was 2)
-  },
-  regenerator: {
-    hp: 180,            // Balanced
-    speed: 18.0,
-    cost: 85,
-    armor: 0,
-    regen: 0.08,        // ~5 HP/sec (was 180 HP/sec, now reasonable)
-    aura: null
-  },
-  boss: {
-    hp: 800,            // Reduced from 1000
-    speed: 10.0,
-    cost: 200,
-    armor: 6,           // Reduced from 10
-    regen: 0.03,        // ~2 HP/sec (was 120 HP/sec!)
-    aura: 'resistance',
-    auraRadius: 150,
-    auraAmount: 0.15    // 15% damage reduction (was 20%)
-  }
-};
+// Build enemy stats from GameConfig (removing description field)
+Object.entries(_config.enemies).forEach(([name, config]) => {
+  ENEMY_STATS[name] = {
+    hp: config.hp,
+    speed: config.speed,
+    cost: config.cost,
+    armor: config.armor || 0,
+    regen: config.regen || 0,
+    aura: config.aura || null,
+    ...(config.auraRadius && { auraRadius: config.auraRadius }),
+    ...(config.auraAmount && { auraAmount: config.auraAmount }),
+    ...(config.unitCount && { unitCount: config.unitCount })
+  };
+});
 
 // ============================================
-// TOWER STATS
+// TOWER STATS (from GameConfig)
 // ============================================
-const TOWER_STATS = {
-  // Original towers
-  basic: {
-    damage: 14,         // Final balance
-    fireRate: 0.9,      // Slightly slower (was 1.0)
-    range: TOWER_RANGE,
-    cost: 100,
-    special: null
-  },
-  slow: {
-    damage: 8,
-    fireRate: 0.9,
-    range: TOWER_RANGE,
-    cost: 100,
-    special: 'slow',
-    slowAmount: 0.55    // 55% speed (moderate slow)
-  },
-  burst: {
-    damage: 40,         // Final balance
-    fireRate: 0.4,
-    range: TOWER_RANGE,
-    cost: 150,
-    special: null
-  },
+const TOWER_STATS = {};
 
-  // New towers
-  chain: {
-    damage: 14,             // Increased from 8 (better AoE)
-    fireRate: 0.8,
-    range: TOWER_RANGE,
-    cost: 125,
-    special: 'chain',
-    chainCount: 4,          // Hits up to 4 targets (was 3)
-    chainDamageDecay: 0.75  // Each jump does 75% of previous (was 70%)
-  },
-  sniper: {
-    damage: 85,             // Increased from 60 (anti-tank specialist)
-    fireRate: 0.25,
-    range: 200,             // Extended range
-    cost: 175,
-    special: 'armorPierce',
-    armorPiercePercent: 0.7 // Ignores 70% armor (up from 50%)
-  },
-  support: {
-    damage: 0,
-    fireRate: 0,
-    range: 150,
-    cost: 80,
-    special: 'buff',
-    buffRadius: 100,
-    damageBuffPercent: 0.25 // +25% damage to nearby towers
-  }
-};
+// Build tower stats from GameConfig (removing description field)
+Object.entries(_config.towers).forEach(([name, config]) => {
+  TOWER_STATS[name] = {
+    damage: config.damage,
+    fireRate: config.fireRate,
+    range: config.range,
+    cost: config.cost,
+    special: config.special || null,
+    ...(config.slowAmount && { slowAmount: config.slowAmount }),
+    ...(config.chainCount && { chainCount: config.chainCount }),
+    ...(config.chainDamageDecay && { chainDamageDecay: config.chainDamageDecay }),
+    ...(config.armorPiercePercent && { armorPiercePercent: config.armorPiercePercent }),
+    ...(config.buffRadius && { buffRadius: config.buffRadius }),
+    ...(config.damageBuffPercent && { damageBuffPercent: config.damageBuffPercent })
+  };
+});
 
 // ============================================
-// VALID TYPES
+// VALID TYPES (from GameConfig)
 // ============================================
-const VALID_TOWER_TYPES = ['basic', 'slow', 'burst', 'chain', 'sniper', 'support'];
-const VALID_ENEMY_TYPES = ['runner', 'tank', 'swarm', 'healer', 'shieldBearer', 'regenerator', 'boss'];
+const VALID_TOWER_TYPES = Object.keys(_config.towers);
+const VALID_ENEMY_TYPES = Object.keys(_config.enemies);
 
 // ============================================
 // EXPORTS

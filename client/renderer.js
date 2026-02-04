@@ -3,15 +3,57 @@
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
-// Game constants (must match server)
-const PATH_LENGTH = 1000;
-const TOWER_POSITIONS = { A: 100, B: 300, C: 500, D: 700, E: 900 };
+// Game configuration (can be updated from server via setConfig)
+let config = {
+  pathLength: 1000,
+  canvasWidth: 800,
+  canvasHeight: 200,
+  towerPositions: { A: 100, B: 300, C: 500, D: 700, E: 900 }
+};
+
+// Game constants (derived from config)
+let PATH_LENGTH = config.pathLength;
+let TOWER_POSITIONS = config.towerPositions;
 
 // Visual constants
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 200;
+let CANVAS_WIDTH = config.canvasWidth;
+let CANVAS_HEIGHT = config.canvasHeight;
 const PATH_Y = 100;
 const PATH_HEIGHT = 20;
+
+// Set configuration from server (called by socket.js)
+function setConfig(serverConfig) {
+  if (!serverConfig) return;
+
+  // Update config
+  if (serverConfig.map) {
+    config.pathLength = serverConfig.map.pathLength || 1000;
+    config.canvasWidth = serverConfig.map.canvasWidth || 800;
+    config.canvasHeight = serverConfig.map.canvasHeight || 200;
+
+    // Update tower positions from tower zones
+    if (serverConfig.map.towerZones) {
+      config.towerPositions = {};
+      serverConfig.map.towerZones.forEach(zone => {
+        config.towerPositions[zone.id] = zone.x;
+      });
+    }
+  }
+
+  // Update derived constants
+  PATH_LENGTH = config.pathLength;
+  TOWER_POSITIONS = config.towerPositions;
+  CANVAS_WIDTH = config.canvasWidth;
+  CANVAS_HEIGHT = config.canvasHeight;
+
+  // Update canvas dimensions if needed
+  if (canvas.width !== CANVAS_WIDTH || canvas.height !== CANVAS_HEIGHT) {
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+  }
+
+  console.log('Renderer config updated:', config);
+}
 
 // Colors
 const COLORS = {
@@ -400,6 +442,8 @@ window.renderer = {
   // Projectile system
   createProjectile,
   gameToCanvasX,
+  // Configuration
+  setConfig,
   // Constants for external use
   PATH_Y,
   CANVAS_WIDTH

@@ -818,10 +818,39 @@ async function setMatchSpeed(speed) {
   }
 }
 
+// Game configuration (loaded from server)
+let gameConfig = null;
+
+// Load game configuration from server
+async function loadGameConfig() {
+  try {
+    const response = await fetch('/api/rules');
+    const result = await response.json();
+
+    if (result.success) {
+      gameConfig = result.data;
+      console.log('Game config loaded:', gameConfig.version);
+
+      // Pass to renderer if available
+      if (window.renderer && window.renderer.setConfig) {
+        window.renderer.setConfig(gameConfig);
+      }
+
+      return gameConfig;
+    }
+  } catch (error) {
+    console.error('Failed to load game config:', error);
+  }
+  return null;
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   // Connect WebSocket
   connect();
+
+  // Load game configuration
+  loadGameConfig();
 
   // Fetch initial dashboard data
   fetchDashboard();

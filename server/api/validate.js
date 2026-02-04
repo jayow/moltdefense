@@ -368,6 +368,12 @@ function validateSubmission(body) {
     return { valid: false, error: 'agent_id must be 1-50 characters' };
   }
 
+  // Security: Agent ID must be alphanumeric (with underscores and hyphens allowed)
+  // This prevents injection attacks and log manipulation
+  if (!/^[a-zA-Z0-9_-]+$/.test(body.agent_id)) {
+    return { valid: false, error: 'agent_id must contain only letters, numbers, underscores, and hyphens' };
+  }
+
   // Check side
   if (!body.side || !['attack', 'defend'].includes(body.side)) {
     return { valid: false, error: "side must be 'attack' or 'defend'" };
