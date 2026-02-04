@@ -276,114 +276,153 @@ function attackPowerUp() {
 // ============================================
 
 /**
- * Generate a random defense build within budget
+ * Generate a random defense build within budget using free-flow placement
  */
 function defendRandom() {
-  const towers = {};
+  const towers = [];
   let spent = 0;
-  const shuffledSlots = [...TOWER_SLOTS].sort(() => Math.random() - 0.5);
+  const minSpacing = 50;
+  const minX = 50;
+  const maxX = 950;
+  const lanes = ['top', 'bottom'];
 
-  for (const slot of shuffledSlots) {
-    if (spent >= BUDGET - 100) break;
+  // Generate random positions ensuring minimum spacing
+  const usedPositions = [];
+  const maxTowers = 5;
 
+  for (let i = 0; i < maxTowers && spent < BUDGET - 80; i++) {
+    // Find a valid position with minimum spacing
+    let attempts = 0;
+    let x = null;
+
+    while (attempts < 20) {
+      const candidateX = minX + Math.floor(Math.random() * (maxX - minX));
+      const tooClose = usedPositions.some(pos => Math.abs(pos - candidateX) < minSpacing);
+
+      if (!tooClose) {
+        x = candidateX;
+        break;
+      }
+      attempts++;
+    }
+
+    if (x === null) break; // Couldn't find valid position
+
+    // Pick a random tower type within budget
     const availableTypes = TOWER_TYPES.filter(t => spent + TOWER_COSTS[t] <= BUDGET);
     if (availableTypes.length === 0) break;
 
     const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
-    towers[slot] = type;
+    const lane = lanes[Math.floor(Math.random() * lanes.length)];
+
+    towers.push({ x, type, lane });
+    usedPositions.push(x);
     spent += TOWER_COSTS[type];
   }
+
+  // Sort by x position for cleaner output
+  towers.sort((a, b) => a.x - b.x);
 
   return { towers };
 }
 
 /**
- * Slow wall - maximize slow effect
+ * Slow wall - maximize slow effect with varied positions
  */
 function defendSlowWall() {
-  // 5 slow towers = 500
+  // 5 slow towers = 500, spread across map with some variation
+  const basePositions = [100, 280, 460, 640, 820];
+  const variation = () => Math.floor(Math.random() * 60) - 30; // ±30 variation
+
   return {
-    towers: {
-      A: 'slow',
-      B: 'slow',
-      C: 'slow',
-      D: 'slow',
-      E: 'slow'
-    }
+    towers: [
+      { x: basePositions[0] + variation(), type: 'slow', lane: 'top' },
+      { x: basePositions[1] + variation(), type: 'slow', lane: 'bottom' },
+      { x: basePositions[2] + variation(), type: 'slow', lane: 'top' },
+      { x: basePositions[3] + variation(), type: 'slow', lane: 'bottom' },
+      { x: basePositions[4] + variation(), type: 'slow', lane: 'top' }
+    ]
   };
 }
 
 /**
- * Burst strategy - high damage output
+ * Burst strategy - high damage output with varied positions
  */
 function defendBurst() {
-  // 3 burst = 450, 1 slow = 100 = too much
-  // 3 burst = 450
+  const variation = () => Math.floor(Math.random() * 50) - 25;
+
   return {
-    towers: {
-      A: 'slow',    // 100 - slow first
-      B: 'burst',   // 150
-      C: 'burst',   // 150
-      E: 'basic'    // 100 = 500
-    }
+    towers: [
+      { x: 120 + variation(), type: 'slow', lane: 'top' },     // 100 - slow first
+      { x: 320 + variation(), type: 'burst', lane: 'bottom' }, // 150
+      { x: 520 + variation(), type: 'burst', lane: 'top' },    // 150
+      { x: 750 + variation(), type: 'basic', lane: 'bottom' }  // 100 = 500
+    ]
   };
 }
 
 /**
- * Balanced defense - mix of tower types
+ * Balanced defense - mix of tower types with varied positions
  */
 function defendBalanced() {
+  const variation = () => Math.floor(Math.random() * 60) - 30;
+
   return {
-    towers: {
-      A: 'slow',    // 100
-      B: 'basic',   // 100
-      C: 'burst',   // 150
-      D: 'basic'    // 100 = 450
-    }
+    towers: [
+      { x: 100 + variation(), type: 'slow', lane: 'top' },     // 100
+      { x: 300 + variation(), type: 'basic', lane: 'bottom' }, // 100
+      { x: 500 + variation(), type: 'burst', lane: 'top' },    // 150
+      { x: 700 + variation(), type: 'basic', lane: 'bottom' }  // 100 = 450
+    ]
   };
 }
 
 /**
- * Front-heavy - stop enemies early
+ * Front-heavy - stop enemies early with varied positions
  */
 function defendFrontHeavy() {
+  const variation = () => Math.floor(Math.random() * 40) - 20;
+
   return {
-    towers: {
-      A: 'slow',    // 100
-      B: 'burst',   // 150
-      C: 'basic',   // 100
-      D: 'basic'    // 100 = 450
-    }
+    towers: [
+      { x: 80 + variation(), type: 'slow', lane: 'top' },      // 100
+      { x: 200 + variation(), type: 'burst', lane: 'bottom' }, // 150
+      { x: 350 + variation(), type: 'basic', lane: 'top' },    // 100
+      { x: 500 + variation(), type: 'basic', lane: 'bottom' }  // 100 = 450
+    ]
   };
 }
 
 /**
- * Back-heavy - last line of defense
+ * Back-heavy - last line of defense with varied positions
  */
 function defendBackHeavy() {
+  const variation = () => Math.floor(Math.random() * 40) - 20;
+
   return {
-    towers: {
-      B: 'basic',   // 100
-      C: 'slow',    // 100
-      D: 'burst',   // 150
-      E: 'burst'    // 150 = 500
-    }
+    towers: [
+      { x: 400 + variation(), type: 'basic', lane: 'top' },    // 100
+      { x: 550 + variation(), type: 'slow', lane: 'bottom' },  // 100
+      { x: 700 + variation(), type: 'burst', lane: 'top' },    // 150
+      { x: 850 + variation(), type: 'burst', lane: 'bottom' }  // 150 = 500
+    ]
   };
 }
 
 /**
- * DPS focused - maximize damage output
+ * DPS focused - maximize damage output with varied positions
  */
 function defendDPS() {
-  // Basic towers have best DPS per cost
+  const variation = () => Math.floor(Math.random() * 50) - 25;
+
   return {
-    towers: {
-      A: 'slow',    // 100 - need one slow
-      B: 'basic',   // 100
-      C: 'basic',   // 100
-      D: 'basic',   // 100
-      E: 'basic'    // 100 = 500
-    }
+    towers: [
+      { x: 100 + variation(), type: 'slow', lane: 'top' },     // 100 - need one slow
+      { x: 280 + variation(), type: 'basic', lane: 'bottom' }, // 100
+      { x: 460 + variation(), type: 'basic', lane: 'top' },    // 100
+      { x: 640 + variation(), type: 'basic', lane: 'bottom' }, // 100
+      { x: 820 + variation(), type: 'basic', lane: 'top' }     // 100 = 500
+    ]
   };
 }
 

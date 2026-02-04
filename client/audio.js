@@ -5,6 +5,44 @@ let audioCtx = null;
 let soundEnabled = false;
 let masterVolume = 0.05; // Lower default volume for less jarring audio
 
+// Background music state
+let musicEnabled = false;
+let musicGainNode = null;
+let musicInterval = null;
+let musicVolume = 0.3; // Music is quieter relative to master
+
+// 8-bit chiptune melody pattern - relaxed tower defense vibe
+const MUSIC_PATTERN = {
+  // Main melody (triangle wave) - pentatonic scale for pleasant looping
+  melody: [
+    { freq: 330, dur: 0.4 },   // E4
+    { freq: 392, dur: 0.4 },   // G4
+    { freq: 440, dur: 0.4 },   // A4
+    { freq: 523, dur: 0.8 },   // C5
+    { freq: 440, dur: 0.4 },   // A4
+    { freq: 392, dur: 0.4 },   // G4
+    { freq: 330, dur: 0.8 },   // E4
+    { freq: 294, dur: 0.4 },   // D4
+    { freq: 330, dur: 0.4 },   // E4
+    { freq: 392, dur: 0.8 },   // G4
+    { freq: 330, dur: 0.4 },   // E4
+    { freq: 294, dur: 0.4 },   // D4
+    { freq: 262, dur: 0.8 },   // C4
+  ],
+  // Bass line (square wave at low octave)
+  bass: [
+    { freq: 131, dur: 0.8 },   // C3
+    { freq: 131, dur: 0.8 },   // C3
+    { freq: 165, dur: 0.8 },   // E3
+    { freq: 165, dur: 0.8 },   // E3
+    { freq: 147, dur: 0.8 },   // D3
+    { freq: 147, dur: 0.8 },   // D3
+    { freq: 131, dur: 0.8 },   // C3
+    { freq: 131, dur: 0.8 },   // C3
+  ],
+  loopDuration: 6.4  // Total loop time in seconds
+};
+
 // Rate limiting for frequent sounds
 let lastShootTime = 0;
 let lastKillTime = 0;
@@ -24,12 +62,39 @@ function initAudio() {
   return true;
 }
 
-// Toggle sound on/off
+// Toggle sound effects on/off (separate from music)
+function toggleSound() {
+  if (!audioCtx) {
+    initAudio();
+  }
+  soundEnabled = !soundEnabled;
+  return soundEnabled;
+}
+
+// Toggle music on/off (separate from sound effects)
+function toggleMusic() {
+  if (!audioCtx) {
+    initAudio();
+  }
+  if (musicEnabled) {
+    stopMusic();
+  } else {
+    startMusic();
+  }
+  return musicEnabled;
+}
+
+// Legacy toggle function - toggles both for backwards compatibility
 function toggle() {
   if (!audioCtx) {
     initAudio();
+  }
+  // Toggle both together
+  soundEnabled = !soundEnabled;
+  if (soundEnabled) {
+    startMusic();
   } else {
-    soundEnabled = !soundEnabled;
+    stopMusic();
   }
   return soundEnabled;
 }
@@ -37,6 +102,7 @@ function toggle() {
 // Set master volume (0.0 to 1.0)
 function setVolume(vol) {
   masterVolume = Math.max(0, Math.min(1, vol));
+  updateMusicVolume();
 }
 
 // Play a sound effect
@@ -265,11 +331,108 @@ function isEnabled() {
   return soundEnabled;
 }
 
+// Get current volume (0-1)
+function getVolume() {
+  return masterVolume;
+}
+
+// Start background music loop
+function startMusic() {
+  if (!audioCtx || musicEnabled) return;
+
+  musicEnabled = true;
+  musicGainNode = audioCtx.createGain();
+  musicGainNode.connect(audioCtx.destination);
+  musicGainNode.gain.setValueAtTime(masterVolume * musicVolume, audioCtx.currentTime);
+
+  // Play the music pattern on loop
+  function playMusicLoop() {
+    if (!musicEnabled || !audioCtx) return;
+
+    const startTime = audioCtx.currentTime;
+
+    // Play melody
+    let melodyTime = 0;
+    MUSIC_PATTERN.melody.forEach(note => {
+      playMusicNote(note.freq, startTime + melodyTime, note.dur, 'triangle', 0.15);
+      melodyTime += note.dur;
+    });
+
+    // Play bass
+    let bassTime = 0;
+    MUSIC_PATTERN.bass.forEach(note => {
+      playMusicNote(note.freq, startTime + bassTime, note.dur, 'square', 0.08);
+      bassTime += note.dur;
+    });
+
+    // Schedule next loop
+    musicInterval = setTimeout(playMusicLoop, MUSIC_PATTERN.loopDuration * 1000);
+  }
+
+  playMusicLoop();
+}
+
+// Play a single music note
+function playMusicNote(freq, startTime, duration, waveType, volume) {
+  if (!audioCtx || !musicEnabled) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.connect(gain);
+  gain.connect(musicGainNode);
+
+  osc.type = waveType;
+  osc.frequency.setValueAtTime(freq, startTime);
+
+  // Gentle envelope for smoother sound
+  const attackTime = 0.02;
+  const releaseTime = 0.05;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(volume, startTime + attackTime);
+  gain.gain.setValueAtTime(volume, startTime + duration - releaseTime);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+// Stop background music
+function stopMusic() {
+  musicEnabled = false;
+  if (musicInterval) {
+    clearTimeout(musicInterval);
+    musicInterval = null;
+  }
+  if (musicGainNode) {
+    musicGainNode.gain.setValueAtTime(0, audioCtx?.currentTime || 0);
+    musicGainNode = null;
+  }
+}
+
+// Update music volume when master volume changes
+function updateMusicVolume() {
+  if (musicGainNode && audioCtx) {
+    musicGainNode.gain.setValueAtTime(masterVolume * musicVolume, audioCtx.currentTime);
+  }
+}
+
+// Check if music is enabled
+function isMusicEnabled() {
+  return musicEnabled;
+}
+
 // Export global interface
 window.gameAudio = {
   initAudio,
   playSound,
-  toggle,
+  toggle,           // Legacy: toggles both
+  toggleSound,      // Toggle sound FX only
+  toggleMusic,      // Toggle music only
   setVolume,
-  isEnabled
+  isEnabled,        // Sound FX enabled?
+  isMusicEnabled,   // Music enabled?
+  getVolume,
+  startMusic,
+  stopMusic
 };

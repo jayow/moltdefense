@@ -194,7 +194,7 @@ function renderLeaderboard(leaderboard, totalAgents = 0) {
 
   // Add "View all" link if there are more agents than shown
   const viewAllLink = totalAgents > 10
-    ? `<a href="/leaderboard" target="_blank" class="view-all-link">View all ${totalAgents} agents →</a>`
+    ? `<a href="/leaderboard.html" class="view-all-link">View all ${totalAgents} agents →</a>`
     : '';
 
   container.innerHTML = entries + viewAllLink;
@@ -904,26 +904,74 @@ document.addEventListener('DOMContentLoaded', () => {
     runDemoMatch(true);
   });
 
-  // Sound toggle button
-  const soundBtn = document.getElementById('sound-btn');
-  if (soundBtn) {
-    soundBtn.addEventListener('click', () => {
+  // Sound FX toggle button
+  const sfxBtn = document.getElementById('sfx-btn');
+  if (sfxBtn) {
+    sfxBtn.addEventListener('click', () => {
       if (window.gameAudio) {
-        const isEnabled = window.gameAudio.toggle();
-        soundBtn.textContent = isEnabled ? 'Sound: ON' : 'Sound: OFF';
-        soundBtn.classList.toggle('active', isEnabled);
+        const isEnabled = window.gameAudio.toggleSound();
+        sfxBtn.textContent = isEnabled ? 'SFX: ON' : 'SFX: OFF';
+        sfxBtn.classList.toggle('active', isEnabled);
         // Save preference
-        localStorage.setItem('moltdefense-sound', isEnabled ? 'on' : 'off');
+        localStorage.setItem('moltdefense-sfx', isEnabled ? 'on' : 'off');
       }
     });
 
-    // Restore sound preference
-    const savedPref = localStorage.getItem('moltdefense-sound');
-    if (savedPref === 'on' && window.gameAudio) {
+    // Restore SFX preference
+    const savedSfx = localStorage.getItem('moltdefense-sfx');
+    if (savedSfx === 'on' && window.gameAudio) {
       window.gameAudio.initAudio();
-      soundBtn.textContent = 'Sound: ON';
-      soundBtn.classList.add('active');
+      sfxBtn.textContent = 'SFX: ON';
+      sfxBtn.classList.add('active');
     }
+  }
+
+  // Music toggle button
+  const musicBtn = document.getElementById('music-btn');
+  if (musicBtn) {
+    musicBtn.addEventListener('click', () => {
+      if (window.gameAudio) {
+        const isEnabled = window.gameAudio.toggleMusic();
+        musicBtn.textContent = isEnabled ? 'Music: ON' : 'Music: OFF';
+        musicBtn.classList.toggle('active', isEnabled);
+        // Save preference
+        localStorage.setItem('moltdefense-music', isEnabled ? 'on' : 'off');
+      }
+    });
+
+    // Restore music preference
+    const savedMusic = localStorage.getItem('moltdefense-music');
+    if (savedMusic === 'on' && window.gameAudio) {
+      window.gameAudio.initAudio();
+      window.gameAudio.startMusic();
+      musicBtn.textContent = 'Music: ON';
+      musicBtn.classList.add('active');
+    }
+  }
+
+  // Volume slider control
+  const volumeSlider = document.getElementById('volume-slider');
+  const volumeValue = document.getElementById('volume-value');
+  if (volumeSlider && volumeValue) {
+    // Restore saved volume
+    const savedVolume = localStorage.getItem('moltdefense-volume');
+    if (savedVolume !== null) {
+      volumeSlider.value = savedVolume;
+      volumeValue.textContent = savedVolume + '%';
+      if (window.gameAudio) {
+        window.gameAudio.setVolume(parseInt(savedVolume) / 100);
+      }
+    }
+
+    volumeSlider.addEventListener('input', (e) => {
+      const vol = parseInt(e.target.value);
+      volumeValue.textContent = vol + '%';
+      if (window.gameAudio) {
+        window.gameAudio.setVolume(vol / 100);
+      }
+      // Save preference
+      localStorage.setItem('moltdefense-volume', vol);
+    });
   }
 
   // Speed control buttons - work for both live matches and replays

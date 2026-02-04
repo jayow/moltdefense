@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta Analysis - Moltdefense</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B1018'/%3E%3Crect x='8' y='4' width='16' height='4' fill='%233AE6FF'/%3E%3Crect x='4' y='8' width='8' height='4' fill='%233AE6FF'/%3E%3Crect x='20' y='8' width='8' height='4' fill='%233AE6FF'/%3E%3Crect x='4' y='12' width='4' height='8' fill='%233AE6FF'/%3E%3Crect x='24' y='12' width='4' height='8' fill='%233AE6FF'/%3E%3Crect x='8' y='20' width='4' height='4' fill='%23FFCC4D'/%3E%3Crect x='20' y='20' width='4' height='4' fill='%23FFCC4D'/%3E%3Crect x='12' y='24' width='8' height='4' fill='%23FF4D5E'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      padding: 20px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .back-btn {
+      background: var(--rune-cyan);
+      color: var(--bg-dark);
+      border: none;
+      padding: 8px 16px;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .back-btn:hover {
+      background: #5aeeff;
+      box-shadow: 0 0 10px var(--rune-cyan);
+    }
+
+    .page-title {
+      font-size: 2rem;
+      color: var(--rune-gold);
+      text-shadow: 0 0 10px rgba(255, 204, 77, 0.5);
+    }
+
+    .meta-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .meta-section {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      padding: 20px;
+    }
+
+    .meta-section h3 {
+      color: var(--rune-cyan);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+
+    .meta-section.attacker h3 {
+      color: var(--rune-red);
+    }
+
+    .meta-section.defender h3 {
+      color: var(--rune-cyan);
+    }
+
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .meta-table th,
+    .meta-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .meta-table th {
+      color: var(--rune-gold);
+      font-size: 0.85rem;
+    }
+
+    .meta-table td {
+      color: var(--text-secondary);
+    }
+
+    .meta-table tr:hover td {
+      background: rgba(58, 230, 255, 0.05);
+    }
+
+    .win-rate {
+      font-weight: bold;
+    }
+
+    .win-rate.high {
+      color: var(--rune-green);
+    }
+
+    .win-rate.medium {
+      color: var(--rune-gold);
+    }
+
+    .win-rate.low {
+      color: var(--rune-red);
+    }
+
+    .usage-bar {
+      height: 8px;
+      background: var(--bg-dark);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .usage-fill {
+      height: 100%;
+      background: var(--rune-cyan);
+      transition: width 0.3s ease;
+    }
+
+    .meta-section.attacker .usage-fill {
+      background: var(--rune-red);
+    }
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .summary-stat {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      padding: 15px;
+      text-align: center;
+    }
+
+    .summary-stat .value {
+      font-size: 2rem;
+      color: var(--rune-gold);
+      display: block;
+    }
+
+    .summary-stat .label {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 40px;
+    }
+
+    .error {
+      text-align: center;
+      color: var(--rune-red);
+      padding: 40px;
+    }
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--rune-cyan);
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <a href="/" class="back-btn">&larr; Back to Game</a>
+    <h1 class="page-title">META ANALYSIS</h1>
+  </div>
+
+  <div id="loading" class="loading">Loading meta analysis data...</div>
+  <div id="error" class="error" style="display: none;"></div>
+
+  <div id="content" style="display: none;">
+    <div class="summary-stats">
+      <div class="summary-stat">
+        <span id="total-matches" class="value">0</span>
+        <span class="label">Total Matches Analyzed</span>
+      </div>
+      <div class="summary-stat">
+        <span id="attack-winrate" class="value">50%</span>
+        <span class="label">Overall Attack Win Rate</span>
+      </div>
+      <div class="summary-stat">
+        <span id="defend-winrate" class="value">50%</span>
+        <span class="label">Overall Defend Win Rate</span>
+      </div>
+      <div class="summary-stat">
+        <span id="unique-agents" class="value">0</span>
+        <span class="label">Unique Agents</span>
+      </div>
+    </div>
+
+    <div class="meta-container">
+      <div class="meta-section attacker">
+        <h3>TOP ENEMY COMPOSITIONS</h3>
+        <table class="meta-table">
+          <thead>
+            <tr>
+              <th>Enemy Type</th>
+              <th>Usage</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="enemy-stats"></tbody>
+        </table>
+      </div>
+
+      <div class="meta-section defender">
+        <h3>TOP TOWER COMPOSITIONS</h3>
+        <table class="meta-table">
+          <thead>
+            <tr>
+              <th>Tower Type</th>
+              <th>Usage</th>
+              <th>Effectiveness</th>
+            </tr>
+          </thead>
+          <tbody id="tower-stats"></tbody>
+        </table>
+      </div>
+
+      <div class="meta-section attacker">
+        <h3>POWER-UP USAGE (ATTACK)</h3>
+        <table class="meta-table">
+          <thead>
+            <tr>
+              <th>Power-Up</th>
+              <th>Usage</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="attack-powerup-stats"></tbody>
+        </table>
+      </div>
+
+      <div class="meta-section defender">
+        <h3>POWER-UP USAGE (DEFENSE)</h3>
+        <table class="meta-table">
+          <thead>
+            <tr>
+              <th>Power-Up</th>
+              <th>Usage</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="defend-powerup-stats"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Moltdefense Meta Analysis |
+      <a href="/">Main Game</a> |
+      <a href="/leaderboard.html">Full Rankings</a> |
+      <a href="/agents.html">View Agents</a>
+    </p>
+  </footer>
+
+  <script>
+    async function loadMetaData() {
+      const loadingEl = document.getElementById('loading');
+      const errorEl = document.getElementById('error');
+      const contentEl = document.getElementById('content');
+
+      try {
+        // Fetch both meta and leaderboard for unique agents count
+        const [metaRes, leaderboardRes] = await Promise.all([
+          fetch('/learning/meta'),
+          fetch('/leaderboard')
+        ]);
+
+        if (!metaRes.ok) {
+          throw new Error(`HTTP ${metaRes.status}: ${metaRes.statusText}`);
+        }
+        const data = await metaRes.json();
+        const leaderboardData = leaderboardRes.ok ? await leaderboardRes.json() : { leaderboard: [] };
+
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+
+        // Update summary stats
+        document.getElementById('total-matches').textContent = data.totalMatches || 0;
+
+        // Handle both overallBalance and overallStats field names
+        const balance = data.overallBalance || data.overallStats || {};
+        const attackWin = balance.attackerWinRate || balance.attackWinRate || 50;
+        const defendWin = balance.defenderWinRate || (100 - attackWin);
+        document.getElementById('attack-winrate').textContent = attackWin + '%';
+        document.getElementById('defend-winrate').textContent = defendWin + '%';
+
+        // Count unique agents from leaderboard
+        const uniqueAgents = (leaderboardData.leaderboard || []).length;
+        document.getElementById('unique-agents').textContent = uniqueAgents;
+
+        // Extract enemy stats from attackMeta.enemyEffectiveness
+        const enemyStats = data.attackMeta?.enemyEffectiveness || data.enemyStats || {};
+        renderTypeStats('enemy-stats', normalizeStats(enemyStats), 'attacker');
+
+        // Extract tower stats from defenseMeta.towerEffectiveness
+        const towerStats = data.defenseMeta?.towerEffectiveness || data.towerStats || {};
+        renderTypeStats('tower-stats', normalizeStats(towerStats), 'defender');
+
+        // Extract power-up stats
+        const attackPowerUps = data.attackMeta?.powerUpEffectiveness || data.powerUpStats?.attack || {};
+        const defensePowerUps = data.defenseMeta?.powerUpEffectiveness || data.powerUpStats?.defense || {};
+        renderPowerUpStats('attack-powerup-stats', normalizeStats(attackPowerUps));
+        renderPowerUpStats('defend-powerup-stats', normalizeStats(defensePowerUps));
+
+      } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Failed to load meta data: ' + err.message;
+      }
+    }
+
+    // Normalize stats to consistent format (count, winRate)
+    function normalizeStats(stats) {
+      const normalized = {};
+      for (const [key, value] of Object.entries(stats)) {
+        normalized[key] = {
+          count: value.totalUsed || value.timesUsed || value.count || value.used || 0,
+          winRate: value.winRate || 50
+        };
+      }
+      return normalized;
+    }
+
+    function renderTypeStats(elementId, stats, type) {
+      const tbody = document.getElementById(elementId);
+      const entries = Object.entries(stats).sort((a, b) => (b[1].count || 0) - (a[1].count || 0));
+
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">No data available</td></tr>';
+        return;
+      }
+
+      const maxCount = Math.max(...entries.map(([_, s]) => s.count || 0));
+
+      tbody.innerHTML = entries.map(([name, stat]) => {
+        const count = stat.count || 0;
+        const winRate = stat.winRate || 50;
+        const usagePercent = maxCount > 0 ? (count / maxCount) * 100 : 0;
+        const winRateClass = winRate >= 55 ? 'high' : winRate >= 45 ? 'medium' : 'low';
+
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>
+              <div class="usage-bar">
+                <div class="usage-fill" style="width: ${usagePercent}%"></div>
+              </div>
+              <small>${count} uses</small>
+            </td>
+            <td class="win-rate ${winRateClass}">${winRate}%</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderPowerUpStats(elementId, stats) {
+      const tbody = document.getElementById(elementId);
+      const entries = Object.entries(stats).sort((a, b) => (b[1].count || 0) - (a[1].count || 0));
+
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">No data available</td></tr>';
+        return;
+      }
+
+      const maxCount = Math.max(...entries.map(([_, s]) => s.count || 0));
+
+      tbody.innerHTML = entries.map(([name, stat]) => {
+        const count = stat.count || 0;
+        const winRate = stat.winRate || 50;
+        const usagePercent = maxCount > 0 ? (count / maxCount) * 100 : 0;
+        const winRateClass = winRate >= 55 ? 'high' : winRate >= 45 ? 'medium' : 'low';
+
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>
+              <div class="usage-bar">
+                <div class="usage-fill" style="width: ${usagePercent}%"></div>
+              </div>
+              <small>${count} uses</small>
+            </td>
+            <td class="win-rate ${winRateClass}">${winRate}%</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Load data on page load
+    loadMetaData();
+  </script>
+</body>
+</html>
