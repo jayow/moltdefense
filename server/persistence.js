@@ -5,8 +5,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Data file paths
-const DATA_DIR = path.join(__dirname, '../data');
+// Data file paths - use environment variable for Railway volume mount
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const MATCH_HISTORY_FILE = path.join(DATA_DIR, 'match-history.json');
 const ELO_RANKINGS_FILE = path.join(DATA_DIR, 'elo-rankings.json');
 
