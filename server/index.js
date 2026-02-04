@@ -12,10 +12,10 @@ const SECURITY_CONFIG = {
     'http://localhost:3000',
     'http://127.0.0.1:3000'
   ],
-  // Rate limiting
+  // Rate limiting (relaxed for development, tighten for production)
   rateLimit: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per window
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 200, // 200 requests per minute
     message: { error: 'Too many requests, please try again later' }
   },
   // WebSocket message limits

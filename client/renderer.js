@@ -55,39 +55,39 @@ function setConfig(serverConfig) {
   console.log('Renderer config updated:', config);
 }
 
-// Colors
+// Colors - Zelda HUD Theme (4 rune accents only)
 const COLORS = {
-  background: '#0a0a12',
-  path: '#1a2a3a',
-  pathBorder: '#2d4059',
+  background: '#070A0F',
+  path: '#0B1018',
+  pathBorder: '#1E2A3A',
 
-  // Tower colors
-  tower_basic: '#3498db',
-  tower_slow: '#9b59b6',
-  tower_burst: '#e74c3c',
-  tower_chain: '#e67e22',
-  tower_sniper: '#1abc9c',
-  tower_support: '#f1c40f',
-  tower_range: 'rgba(255, 255, 255, 0.05)',
+  // Tower colors - Zelda rune palette
+  tower_basic: '#3AE6FF',     // Cyan rune
+  tower_slow: '#3AE6FF',      // Cyan rune
+  tower_burst: '#FF4D5E',     // Red rune
+  tower_chain: '#FFCC4D',     // Gold rune
+  tower_sniper: '#2EE59D',    // Green rune
+  tower_support: '#FFCC4D',   // Gold rune
+  tower_range: 'rgba(58, 230, 255, 0.08)',
 
-  // Enemy colors
-  enemy_runner: '#2ecc71',
-  enemy_tank: '#f39c12',
-  enemy_swarm_unit: '#1abc9c',
-  enemy_healer: '#e91e63',
-  enemy_shieldBearer: '#00bcd4',
-  enemy_regenerator: '#8bc34a',
-  enemy_boss: '#ff5722',
+  // Enemy colors - Zelda rune palette
+  enemy_runner: '#2EE59D',    // Green rune
+  enemy_tank: '#FFCC4D',      // Gold rune
+  enemy_swarm_unit: '#3AE6FF', // Cyan rune
+  enemy_healer: '#FF4D5E',    // Red rune
+  enemy_shieldBearer: '#3AE6FF', // Cyan rune
+  enemy_regenerator: '#2EE59D',  // Green rune
+  enemy_boss: '#FF4D5E',      // Red rune
 
-  healthBar: '#e74c3c',
-  healthBarBg: '#333',
-  healthBarFull: '#2ecc71',
+  healthBar: '#FF4D5E',       // Red rune
+  healthBarBg: '#0B1018',
+  healthBarFull: '#2EE59D',   // Green rune
 
-  text: '#ffffff',
-  textDim: '#666666',
+  text: '#EAF0FF',
+  textDim: '#5D6A7E',
 
-  startMarker: '#2ecc71',
-  endMarker: '#e74c3c'
+  startMarker: '#2EE59D',     // Green rune
+  endMarker: '#FF4D5E'        // Red rune
 };
 
 // Convert game position (0-1000) to canvas X coordinate
@@ -323,9 +323,9 @@ function drawEnemies(enemies) {
     ctx.fillStyle = hpPercent > 0.5 ? COLORS.healthBarFull : COLORS.healthBar;
     ctx.fillRect(x - barWidth / 2, barY, barWidth * hpPercent, barHeight);
 
-    // Slow indicator
+    // Slow indicator (cyan rune)
     if (enemy.speedMultiplier && enemy.speedMultiplier < 1) {
-      ctx.fillStyle = '#9b59b6';
+      ctx.fillStyle = '#3AE6FF';
       ctx.beginPath();
       ctx.arc(x, y - size - 15, 3, 0, Math.PI * 2);
       ctx.fill();

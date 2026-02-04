@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { addToQueue } = require('../matchmaker');
+const { addToQueue, removeFromQueue } = require('../matchmaker');
 const { loadMatchHistory, getLeaderboard } = require('../persistence');
 
 // Import strategies from agents folder
@@ -287,8 +287,27 @@ router.post('/', async (req, res) => {
     submittedAt: timestamp
   };
 
-  addToQueue(attackerAgent);
+  // Try to add attacker first
+  const attackResult = addToQueue(attackerAgent);
+  if (attackResult.rejected) {
+    return res.status(409).json({
+      status: 'error',
+      error: `Attacker "${attackerName}" - ${attackResult.reason}`,
+      retryIn: attackResult.retryIn || 5
+    });
+  }
+
+  // Then add defender
   const result = addToQueue(defenderAgent);
+  if (result.rejected) {
+    // Remove attacker from queue since defender failed
+    removeFromQueue(attackerName, 'attack');
+    return res.status(409).json({
+      status: 'error',
+      error: `Defender "${defenderName}" - ${result.reason}`,
+      retryIn: result.retryIn || 5
+    });
+  }
 
   if (result.matched) {
     res.json({
@@ -307,7 +326,7 @@ router.post('/', async (req, res) => {
       results_url: `/results/${result.matchId}`
     });
   } else {
-    res.status(500).json({ status: 'error', error: 'Failed to create match' });
+    res.status(500).json({ status: 'error', error: 'Failed to create match - no opponent available' });
   }
 });
 
