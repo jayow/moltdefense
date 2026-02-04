@@ -52,12 +52,12 @@ const GameConfig = {
     id: 'default',
     name: 'Classic Lane',
     pathLength: 1000,
-    canvasWidth: 800,
-    canvasHeight: 200,
+    canvasWidth: 1000,
+    canvasHeight: 280,
     lanes: ['top', 'bottom'],
     lanePositions: {
-      top: 50,
-      bottom: 150,
+      top: 60,
+      bottom: 220,
     },
     towerZones: [
       { id: 'A', x: 100, allowedLanes: ['top', 'bottom'] },

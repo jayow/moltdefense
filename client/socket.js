@@ -83,7 +83,6 @@ function handleMessage(message) {
           // Play sounds for live match events
           if (window.gameAudio) {
             if (event.type === 'damage') {
-              window.gameAudio.playSound('shoot');
               // Create projectile for live match
               if (window.renderer.createProjectile && message.towers && message.enemies) {
                 const tower = findTowerForProjectile(event.tower, message.towers);
@@ -94,10 +93,17 @@ function handleMessage(message) {
                   window.renderer.createProjectile(
                     tower.x, tower.y,
                     window.renderer.gameToCanvasX(enemy.position) + leadOffset,
-                    100, // PATH_Y
+                    window.renderer?.PATH_Y || 140,
                     tower.type
                   );
+                  // Play tower-specific shoot sound
+                  window.gameAudio.playSound('shoot_' + (tower.type || 'basic'));
+                } else {
+                  // Fallback to generic shoot sound
+                  window.gameAudio.playSound('shoot');
                 }
+              } else {
+                window.gameAudio.playSound('shoot');
               }
             } else if (event.type === 'kill') {
               window.gameAudio.playSound('kill');
@@ -329,15 +335,35 @@ function renderQueueStatus(queue) {
       defendersListEl.innerHTML = '<div class="queue-empty">No defenders waiting</div>';
     }
   }
+
+  // Toggle glow animation based on waiting agents
+  const waitingEl = document.getElementById('queue-waiting');
+  if (waitingEl) {
+    if ((queue.attackers && queue.attackers > 0) || (queue.defenders && queue.defenders > 0)) {
+      waitingEl.classList.add('has-waiting');
+    } else {
+      waitingEl.classList.remove('has-waiting');
+    }
+  }
 }
 
 // Render live matches with spectate option
 function renderLiveMatches(liveMatches) {
   const container = document.getElementById('live-matches-list');
   const countEl = document.getElementById('queue-active');
+  const sectionEl = document.getElementById('live-matches-section');
 
   if (countEl) countEl.textContent = liveMatches?.length || 0;
   if (!container) return;
+
+  // Toggle glow animation based on activity
+  if (sectionEl) {
+    if (liveMatches && liveMatches.length > 0) {
+      sectionEl.classList.add('has-activity');
+    } else {
+      sectionEl.classList.remove('has-activity');
+    }
+  }
 
   if (!liveMatches || liveMatches.length === 0) {
     container.innerHTML = '<div class="queue-empty">No live matches</div>';
@@ -560,13 +586,19 @@ function startReplay(replay) {
                 window.renderer.createProjectile(
                   tower.x, tower.y,
                   window.renderer.gameToCanvasX(enemy.position) + leadOffset,
-                  100, // PATH_Y
+                  window.renderer?.PATH_Y || 140,
                   tower.type
                 );
+                // Play tower-specific shoot sound
+                if (window.gameAudio) window.gameAudio.playSound('shoot_' + (tower.type || 'basic'));
+              } else {
+                // Fallback to generic shoot sound
+                if (window.gameAudio) window.gameAudio.playSound('shoot');
               }
+            } else {
+              // Play generic shoot sound if no projectile system
+              if (window.gameAudio) window.gameAudio.playSound('shoot');
             }
-            // Play shoot sound
-            if (window.gameAudio) window.gameAudio.playSound('shoot');
           }
         });
       }
@@ -637,6 +669,11 @@ function convertTowersForRenderer(towers) {
 function findTowerForProjectile(towerId, towers) {
   if (!towers || !towerId) return null;
 
+  // Get canvas dimensions from renderer (with fallbacks)
+  const CANVAS_WIDTH = window.renderer?.CANVAS_WIDTH || 1000;
+  const TOP_LANE_Y = 60;
+  const BOTTOM_LANE_Y = 220;
+
   for (const tower of towers) {
     if (tower.slot === towerId || tower.id === towerId) {
       let canvasX, canvasY;
@@ -644,16 +681,16 @@ function findTowerForProjectile(towerId, towers) {
       // Check for position (from live match state) or x (from converted build)
       if (tower.position !== undefined) {
         // Live match format - uses 'position' field
-        canvasX = (tower.position / 1000) * 800;
-        canvasY = tower.lane === 'bottom' ? 150 : 50;
+        canvasX = (tower.position / 1000) * CANVAS_WIDTH;
+        canvasY = tower.lane === 'bottom' ? BOTTOM_LANE_Y : TOP_LANE_Y;
       } else if (tower.x !== undefined) {
         // Converted build format - uses 'x' field
-        canvasX = (tower.x / 1000) * 800;
-        canvasY = tower.lane === 'bottom' ? 150 : 50;
+        canvasX = (tower.x / 1000) * CANVAS_WIDTH;
+        canvasY = tower.lane === 'bottom' ? BOTTOM_LANE_Y : TOP_LANE_Y;
       } else if (tower.slot && TOWER_POSITIONS[tower.slot]) {
         // Slot-based format - lookup position from slot name
-        canvasX = (TOWER_POSITIONS[tower.slot] / 1000) * 800;
-        canvasY = tower.slot.charCodeAt(0) % 2 === 0 ? 50 : 150;
+        canvasX = (TOWER_POSITIONS[tower.slot] / 1000) * CANVAS_WIDTH;
+        canvasY = tower.slot.charCodeAt(0) % 2 === 0 ? TOP_LANE_Y : BOTTOM_LANE_Y;
       } else {
         continue;
       }

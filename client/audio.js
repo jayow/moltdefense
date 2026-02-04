@@ -72,6 +72,7 @@ function playSound(type) {
 
   switch(type) {
     case 'shoot':
+    case 'shoot_basic':
       // Very soft blip - using sine wave with lower pitch
       osc.type = 'sine';
       // Lower pitch range for more pleasant sound
@@ -82,6 +83,65 @@ function playSound(type) {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
       osc.start(now);
       osc.stop(now + 0.025);
+      break;
+
+    case 'shoot_slow':
+      // Frost/ice sound - high pitched crystalline shimmer
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.06);
+      gain.gain.setValueAtTime(masterVolume * 0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now);
+      osc.stop(now + 0.06);
+      // Add secondary shimmer
+      playShimmer(now, 1400, 0.03);
+      break;
+
+    case 'shoot_burst':
+      // Fire/explosion - deep boom with crackle
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+      gain.gain.setValueAtTime(masterVolume * 0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
+      break;
+
+    case 'shoot_chain':
+      // Electric zap - buzzy square wave
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(800 + Math.random() * 400, now);
+      osc.frequency.exponentialRampToValueAtTime(200, now + 0.04);
+      gain.gain.setValueAtTime(masterVolume * 0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc.start(now);
+      osc.stop(now + 0.04);
+      break;
+
+    case 'shoot_sniper':
+      // Arrow/laser - sharp whistle with trail
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.linearRampToValueAtTime(1200, now + 0.02);
+      osc.frequency.exponentialRampToValueAtTime(400, now + 0.08);
+      gain.gain.setValueAtTime(masterVolume * 0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
+      break;
+
+    case 'shoot_support':
+      // Magical buff - gentle chime
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523, now); // C5
+      osc.frequency.setValueAtTime(659, now + 0.03); // E5
+      gain.gain.setValueAtTime(masterVolume * 0.15, now);
+      gain.gain.setValueAtTime(masterVolume * 0.12, now + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now);
+      osc.stop(now + 0.06);
       break;
 
     case 'hit':
@@ -179,6 +239,25 @@ function playArpeggio(frequencies, noteDuration, waveType) {
     osc.start(startTime);
     osc.stop(startTime + noteDuration);
   });
+}
+
+// Play a shimmer effect (for frost/ice sounds)
+function playShimmer(startTime, freq, duration) {
+  if (!soundEnabled || !audioCtx) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, startTime);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.7, startTime + duration);
+  gain.gain.setValueAtTime(masterVolume * 0.1, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  osc.start(startTime);
+  osc.stop(startTime + duration);
 }
 
 // Check if sound is enabled

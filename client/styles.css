@@ -56,8 +56,8 @@
 
   /* ===== LAYOUT ===== */
   --header-height: 24px;  /* Panel header strip */
-  --rail-width: 320px;
-  --page-padding: var(--tile-3x);
+  --rail-width: 260px;    /* Narrower sidebars to emphasize game */
+  --page-padding: var(--tile-2x);
   --panel-padding: var(--tile-2x);
   --gap: var(--tile-2x);
 
@@ -428,24 +428,29 @@ main.dashboard {
 #game-container {
   position: relative;
   overflow: hidden;
-}
-
-/* Arena uses stronger rune glow */
-#game-container {
+  /* Make the arena the visual focus */
+  border-width: 3px;
   border-color: var(--rune-cyan);
   box-shadow:
-    inset 2px 2px 0 0 rgba(58, 230, 255, 0.2),
-    inset -2px -2px 0 0 rgba(58, 230, 255, 0.05),
-    4px 4px 0 0 rgba(0, 0, 0, 0.5),
-    0 0 24px rgba(58, 230, 255, 0.15);
+    /* Inner bevel */
+    inset 3px 3px 0 0 rgba(58, 230, 255, 0.25),
+    inset -3px -3px 0 0 rgba(58, 230, 255, 0.08),
+    /* Outer shadow */
+    6px 6px 0 0 rgba(0, 0, 0, 0.6),
+    /* Prominent glow */
+    0 0 40px rgba(58, 230, 255, 0.2),
+    0 0 80px rgba(58, 230, 255, 0.1);
 }
 
 #game-canvas {
   display: block;
   width: 100%;
   height: auto;
+  min-height: 280px;
   background: var(--bg-base);
   image-rendering: pixelated;
+  /* Subtle inner shadow for depth */
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 /* Tower pad nodes (A-E indicators below canvas) */
@@ -816,6 +821,85 @@ button:active,
   border-bottom: 2px solid var(--panel-border-dark);
 }
 
+/* Subtle breathing glow when queue has items */
+#live-matches-section.has-activity {
+  animation: queuePulse 2s ease-in-out infinite;
+}
+
+@keyframes queuePulse {
+  0%, 100% {
+    border-bottom-color: var(--panel-border-dark);
+    box-shadow: none;
+  }
+  50% {
+    border-bottom-color: var(--rune-green);
+    box-shadow: 0 4px 12px rgba(46, 229, 157, 0.15);
+  }
+}
+
+/* Button-style waiting agent entries with glowing background */
+#queue-waiting .queue-entry {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+/* Attacker queue entries - red glow */
+#queue-attackers-list .queue-entry {
+  border-color: rgba(255, 77, 94, 0.3);
+}
+
+#queue-waiting.has-waiting #queue-attackers-list .queue-entry {
+  animation: attackerEntryGlow 2s ease-in-out infinite;
+}
+
+@keyframes attackerEntryGlow {
+  0%, 100% {
+    background: rgba(255, 77, 94, 0.08);
+    border-color: rgba(255, 77, 94, 0.3);
+    box-shadow: none;
+  }
+  50% {
+    background: rgba(255, 77, 94, 0.18);
+    border-color: var(--rune-red);
+    box-shadow: 0 0 12px rgba(255, 77, 94, 0.4), inset 0 0 8px rgba(255, 77, 94, 0.1);
+  }
+}
+
+/* Defender queue entries - cyan glow */
+#queue-defenders-list .queue-entry {
+  border-color: rgba(58, 230, 255, 0.3);
+}
+
+#queue-waiting.has-waiting #queue-defenders-list .queue-entry {
+  animation: defenderEntryGlow 2s ease-in-out infinite;
+}
+
+@keyframes defenderEntryGlow {
+  0%, 100% {
+    background: rgba(58, 230, 255, 0.08);
+    border-color: rgba(58, 230, 255, 0.3);
+    box-shadow: none;
+  }
+  50% {
+    background: rgba(58, 230, 255, 0.18);
+    border-color: var(--rune-cyan);
+    box-shadow: 0 0 12px rgba(58, 230, 255, 0.4), inset 0 0 8px rgba(58, 230, 255, 0.1);
+  }
+}
+
+/* Agent name styling inside buttons */
+#queue-attackers-list .queue-agent-name {
+  color: var(--rune-red);
+  font-weight: 500;
+}
+
+#queue-defenders-list .queue-agent-name {
+  color: var(--rune-cyan);
+  font-weight: 500;
+}
+
 .queue-header {
   display: flex;
   align-items: center;
@@ -1126,8 +1210,8 @@ footer a:hover {
 /* ========== RESPONSIVE ========== */
 @media (max-width: 1279px) {
   :root {
-    --rail-width: 280px;
-    --page-padding: var(--tile-2x);
+    --rail-width: 220px;
+    --page-padding: var(--tile);
   }
 }
 
